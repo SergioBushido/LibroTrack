@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Genre, Mood, Rating } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { GenreSelector } from '../components/GenreSelector';
 import { MoodSelector } from '../components/MoodSelector';
 import { saveBook } from '../services/bookStorage';
+import { fetchBookCoverUrl } from '../services/bookCoverService';
 import { validateDates } from '../utils/dateUtils';
+import { BookPlaceholder } from '../components/BookPlaceholder';
+import { useEffect } from 'react';
 
 const RATINGS: Rating[] = ['Malo', 'Regular', 'Bueno', 'Muy bueno'];
 
 export const AddBookScreen = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const route = useRoute<RouteProp<{ params: { title?: string, author?: string, coverUrl?: string } }, 'params'>>();
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
 
@@ -26,7 +31,21 @@ export const AddBookScreen = () => {
   const [mood, setMood] = useState<Mood>(null);
   const [notes, setNotes] = useState('');
   const [quote, setQuote] = useState('');
+  const [previewCoverUrl, setPreviewCoverUrl] = useState<string | null>(null);
+  const [isFetchingCover, setIsFetchingCover] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (route.params?.title) {
+      setTitle(route.params.title);
+    }
+    if (route.params?.author) {
+      setAuthor(route.params.author);
+    }
+    if (route.params?.coverUrl) {
+      setPreviewCoverUrl(route.params.coverUrl);
+    }
+  }, [route.params]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -42,6 +61,22 @@ export const AddBookScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleFetchPreview = async () => {
+    if (!title.trim()) {
+      Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
+      return;
+    }
+    setIsFetchingCover(true);
+    try {
+      const url = await fetchBookCoverUrl(title.trim(), author.trim());
+      setPreviewCoverUrl(url);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsFetchingCover(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!validate()) {
       Alert.alert('Revisa los datos', 'Hay errores en el formulario');
@@ -49,6 +84,11 @@ export const AddBookScreen = () => {
     }
 
     try {
+      let coverUrl = previewCoverUrl;
+      if (!coverUrl) {
+        coverUrl = await fetchBookCoverUrl(title.trim(), author.trim());
+      }
+
       await saveBook({
         title: title.trim(),
         author: author.trim(),
@@ -59,6 +99,7 @@ export const AddBookScreen = () => {
         mood,
         notes: notes.trim(),
         quote: quote.trim(),
+        coverUrl: coverUrl ?? undefined,
       });
       
       Alert.alert('¡Guardado!', 'Libro añadido a tu biblioteca', [
@@ -92,6 +133,28 @@ export const AddBookScreen = () => {
           placeholder="Ej: Cien años de soledad" 
         />
         {errors.title && <Text style={[styles.errorText, { color: colors.error }]}>{errors.title}</Text>}
+      </View>
+
+      <View style={styles.coverPreviewContainer}>
+        {previewCoverUrl ? (
+          <Image source={{ uri: previewCoverUrl }} style={styles.coverPreview} resizeMode="contain" />
+        ) : (
+          <BookPlaceholder title={title || 'Título del libro'} author={author || 'Autor'} height={180} />
+        )}
+        <TouchableOpacity 
+          style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]} 
+          onPress={handleFetchPreview}
+          disabled={isFetchingCover}
+        >
+          {isFetchingCover ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="image-search-outline" size={20} color="#FFF" />
+              <Text style={styles.searchCoverBtnText}>Buscar portada</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.field}>
@@ -202,7 +265,7 @@ export const AddBookScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: theme.spacing.xxl * 2,
+    paddingBottom: 120, // Espacio para el Tab Bar flotante
   },
   screenTitle: {
     ...theme.typography.h1,
@@ -274,6 +337,36 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     ...theme.typography.body,
+    fontWeight: '600',
+  },
+  coverPreviewContainer: {
+    marginBottom: theme.spacing.l,
+    borderRadius: theme.borderRadius.m,
+    overflow: 'hidden',
+    height: 180,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    position: 'relative',
+  },
+  coverPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  searchCoverBtn: {
+    position: 'absolute',
+    bottom: theme.spacing.s,
+    right: theme.spacing.s,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    gap: theme.spacing.xs,
+    ...theme.shadow,
+    elevation: 4,
+  },
+  searchCoverBtnText: {
+    color: '#FFF',
+    ...theme.typography.small,
     fontWeight: '600',
   }
 });

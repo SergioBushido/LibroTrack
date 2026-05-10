@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Book } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { RatingBadge } from '../components/RatingBadge';
 import { QuoteBlock } from '../components/QuoteBlock';
+import { BookPlaceholder } from '../components/BookPlaceholder';
 import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
 import { deleteBook, getAllBooks, updateBook } from '../services/bookStorage';
 
@@ -17,6 +18,7 @@ export const BookDetailScreen = () => {
   const [book, setBook] = useState<Book>(route.params?.book);
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const [imageError, setImageError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -25,6 +27,7 @@ export const BookDetailScreen = () => {
         const updatedBook = books.find(b => b.id === book.id);
         if (updatedBook) {
           setBook(updatedBook);
+          setImageError(false);
         }
       };
       fetchBook();
@@ -57,7 +60,7 @@ export const BookDetailScreen = () => {
         { text: "Cancelar", style: "cancel" },
         {
           text: "Guardar",
-          onPress: async (text) => {
+          onPress: async (text: string | undefined) => {
             if (text !== undefined) {
               const updated = await updateBook(book.id, { quote: text });
               setBook(updated);
@@ -79,6 +82,19 @@ export const BookDetailScreen = () => {
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
       </TouchableOpacity>
+
+      <View style={styles.coverContainer}>
+        {book.coverUrl && !imageError ? (
+          <Image 
+            source={{ uri: book.coverUrl }} 
+            style={styles.detailCover} 
+            resizeMode="contain" 
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <BookPlaceholder title={book.title} author={book.author} height={350} />
+        )}
+      </View>
 
       <View style={styles.header}>
         {book.genre && <Text style={[styles.genre, { color: colors.accent2 }]}>{book.genre.toUpperCase()}</Text>}
@@ -157,7 +173,7 @@ export const BookDetailScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: theme.spacing.xxl * 2,
+    paddingBottom: 120, // Espacio para el Tab Bar flotante
   },
   backBtn: {
     marginBottom: theme.spacing.m,
@@ -277,5 +293,18 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  coverContainer: {
+    width: '100%',
+    height: 350,
+    marginBottom: theme.spacing.xl,
+    borderRadius: theme.borderRadius.l,
+    overflow: 'hidden',
+    ...theme.shadow,
+    elevation: 8,
+  },
+  detailCover: {
+    width: '100%',
+    height: '100%',
   }
 });

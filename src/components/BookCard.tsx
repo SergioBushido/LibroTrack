@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Book } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { RatingBadge } from './RatingBadge';
+import { BookPlaceholder } from './BookPlaceholder';
 import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 interface Props {
   book: Book;
@@ -18,9 +19,21 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete }) =
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
   const days = calculateReadingDays(book.startDate, book.endDate);
+  const [imageError, setImageError] = React.useState(false);
 
   return (
     <TouchableOpacity style={[globalStyles.card, styles.container]} onPress={onPress}>
+      {book.coverUrl && !imageError ? (
+        <Image 
+          source={{ uri: book.coverUrl }} 
+          style={styles.coverImage} 
+          resizeMode="contain" 
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <BookPlaceholder title={book.title} author={book.author} />
+      )}
+      
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={[styles.title, { color: colors.ink }]} numberOfLines={2}>{book.title}</Text>
@@ -122,6 +135,12 @@ const styles = StyleSheet.create({
   notesText: {
     ...theme.typography.body,
     fontSize: 14,
+  },
+  coverImage: {
+    width: '100%',
+    height: 180,
+    marginBottom: theme.spacing.m,
+    borderRadius: theme.borderRadius.m,
   },
   footer: {
     flexDirection: 'row',

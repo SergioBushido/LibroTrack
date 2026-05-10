@@ -11,6 +11,7 @@ export interface Book {
   endDate: string;         // ISO: 'YYYY-MM-DD'
   notes?: string;
   quote?: string;          // Cita favorita del libro
+  coverUrl?: string;       // URL de portada
   rating: Rating;
   mood?: Mood;             // Estado de ánimo al terminar
   createdAt: string;

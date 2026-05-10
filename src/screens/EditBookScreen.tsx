@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Book, Genre, Mood, Rating } from '../types/Book';
@@ -9,6 +9,8 @@ import { GenreSelector } from '../components/GenreSelector';
 import { MoodSelector } from '../components/MoodSelector';
 import { updateBook } from '../services/bookStorage';
 import { validateDates } from '../utils/dateUtils';
+import { BookPlaceholder } from '../components/BookPlaceholder';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const RATINGS: Rating[] = ['Malo', 'Regular', 'Bueno', 'Muy bueno'];
 
@@ -28,7 +30,10 @@ export const EditBookScreen = () => {
   const [mood, setMood] = useState<Mood>(book?.mood || null);
   const [notes, setNotes] = useState(book?.notes || '');
   const [quote, setQuote] = useState(book?.quote || '');
+  const [coverUrl, setCoverUrl] = useState(book?.coverUrl || '');
+  const [isFetchingCover, setIsFetchingCover] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [imageError, setImageError] = useState(false);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -42,6 +47,24 @@ export const EditBookScreen = () => {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleFetchPreview = async () => {
+    if (!title.trim()) {
+      Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
+      return;
+    }
+    setIsFetchingCover(true);
+    try {
+      const { fetchBookCoverUrl } = await import('../services/bookCoverService');
+      const url = await fetchBookCoverUrl(title.trim(), author.trim());
+      setCoverUrl(url || '');
+      setImageError(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsFetchingCover(false);
+    }
   };
 
   const handleSave = async () => {
@@ -61,9 +84,10 @@ export const EditBookScreen = () => {
         mood,
         notes: notes.trim(),
         quote: quote.trim(),
+        coverUrl: coverUrl || undefined,
       });
       
-      Alert.alert('¡Actualizado!', 'El libro ha sido modizado', [
+      Alert.alert('¡Actualizado!', 'El libro ha sido modificado', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (e) {
@@ -75,7 +99,35 @@ export const EditBookScreen = () => {
 
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
+      </TouchableOpacity>
+      
       <Text style={[styles.screenTitle, { color: colors.ink }]}>Editar libro</Text>
+
+      <View style={styles.coverPreviewContainer}>
+        {coverUrl && !imageError ? (
+          <Image 
+            source={{ uri: coverUrl }} 
+            style={styles.coverPreview} 
+            resizeMode="contain" 
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <BookPlaceholder title={title || book.title} author={author || book.author} height={150} />
+        )}
+        <TouchableOpacity 
+          style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]} 
+          onPress={handleFetchPreview}
+          disabled={isFetchingCover}
+        >
+          {isFetchingCover ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <MaterialCommunityIcons name="image-search-outline" size={18} color="#FFF" />
+          )}
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
@@ -185,7 +237,10 @@ export const EditBookScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: theme.spacing.xxl * 2,
+    paddingBottom: 120, // Espacio para el Tab Bar flotante
+  },
+  backBtn: {
+    marginBottom: theme.spacing.m,
   },
   screenTitle: {
     ...theme.typography.h1,
@@ -240,5 +295,30 @@ const styles = StyleSheet.create({
   saveBtnText: {
     ...theme.typography.body,
     fontWeight: '600',
+  },
+  coverPreviewContainer: {
+    width: '100%',
+    height: 150,
+    marginBottom: theme.spacing.l,
+    borderRadius: theme.borderRadius.m,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  coverPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  searchCoverBtn: {
+    position: 'absolute',
+    bottom: theme.spacing.s,
+    right: theme.spacing.s,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadow,
+    elevation: 4,
   }
 });

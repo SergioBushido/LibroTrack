@@ -23,9 +23,9 @@ export interface Stats {
   readingStreak: number;            // libros terminados este mes
 }
 
-export const calculateStats = (books: Book[], retaGoal: number): Stats => {
+export const calculateStats = (books: Book[], retaGoal: number, targetYear?: number): Stats => {
   const now = new Date();
-  const currentYear = now.getFullYear();
+  const displayYear = targetYear || now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
 
   const stats: Stats = {
@@ -59,23 +59,25 @@ export const calculateStats = (books: Book[], retaGoal: number): Stats => {
     const endYear = getEndYear(book.endDate);
     const endMonth = getEndMonth(book.endDate); // 1-12
 
-    // Books this year / month
-    if (endYear === currentYear) {
-      stats.booksThisYear++;
-      if (endMonth > 0 && endMonth <= 12) {
-        stats.booksByMonth[endMonth - 1]++;
-      }
-      if (endMonth === currentMonth) {
-        stats.booksThisMonth++;
-      }
-    }
-
-    // Books by Year Map
+    // Books by Year Map (siempre lo llenamos para todos los libros pasados)
     if (endYear > 0) {
       stats.booksByYear[endYear] = (stats.booksByYear[endYear] || 0) + 1;
     }
 
-    // Days per book
+    // Si estamos filtrando por un año específico, solo contamos para stats mensuales y progreso lo de ese año
+    if (endYear === displayYear) {
+      stats.booksThisYear++;
+      if (endMonth > 0 && endMonth <= 12) {
+        stats.booksByMonth[endMonth - 1]++;
+      }
+      
+      // La racha solo tiene sentido para el año y mes actual real
+      if (endYear === now.getFullYear() && endMonth === currentMonth) {
+        stats.booksThisMonth++;
+      }
+    }
+
+    // Days per book (calculado sobre los libros pasados a la función)
     const days = calculateReadingDays(book.startDate, book.endDate);
     totalDays += days;
 
@@ -102,15 +104,20 @@ export const calculateStats = (books: Book[], retaGoal: number): Stats => {
   stats.avgDaysPerBook = Math.round(totalDays / books.length);
   stats.readingStreak = stats.booksThisMonth;
 
-  // Reto Progress
+  // Reto Progress (basado en el displayYear)
   stats.retaProgress.current = stats.booksThisYear;
   stats.retaProgress.percentage = Math.min(100, Math.round((stats.booksThisYear / retaGoal) * 100));
   
-  // Calcular proyeccion asumiendo un ritmo constante en lo que va de año
-  const monthsElapsed = currentMonth; // hasta el mes actual incluido
-  const runRatePerMonth = stats.booksThisYear / monthsElapsed;
-  stats.retaProgress.projectedTotal = Math.round(runRatePerMonth * 12);
-  stats.retaProgress.willAchieve = stats.retaProgress.projectedTotal >= retaGoal;
+  // Calcular proyeccion solo si es el año actual
+  if (displayYear === now.getFullYear()) {
+    const monthsElapsed = currentMonth;
+    const runRatePerMonth = stats.booksThisYear / monthsElapsed;
+    stats.retaProgress.projectedTotal = Math.round(runRatePerMonth * 12);
+    stats.retaProgress.willAchieve = stats.retaProgress.projectedTotal >= retaGoal;
+  } else {
+    stats.retaProgress.projectedTotal = stats.booksThisYear;
+    stats.retaProgress.willAchieve = stats.booksThisYear >= retaGoal;
+  }
 
   return stats;
 };

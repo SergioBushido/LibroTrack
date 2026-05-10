@@ -8,16 +8,26 @@ const MONTHS: Record<string, number> = {
 export interface ParsedBook {
   title: string;
   month: number;
+  year: number;
 }
 
 export const parseNotes = (text: string): ParsedBook[] => {
   const lines = text.split('\n');
   const results: ParsedBook[] = [];
   let currentMonth: number | null = null;
+  let currentYear: number = new Date().getFullYear();
 
   lines.forEach(line => {
     const trimmedLine = line.trim();
     if (!trimmedLine) return;
+
+    // Check if line is a year (4 digits)
+    const yearMatch = trimmedLine.match(/^\d{4}$/);
+    if (yearMatch) {
+      currentYear = parseInt(yearMatch[0]);
+      currentMonth = null; // Reset month when year changes
+      return;
+    }
 
     // Check if line is a month
     const lowerLine = trimmedLine.toLowerCase();
@@ -31,12 +41,13 @@ export const parseNotes = (text: string): ParsedBook[] => {
     // If we have a month, try to extract book titles
     if (currentMonth) {
       // Remove common list prefixes: -, *, 1., 1)
-      let title = trimmedLine.replace(/^[-*•\d+[.)]]\s*/, '').trim();
+      let title = trimmedLine.replace(/^[-*•\d.)]+\s*/, '').trim();
       
       if (title && title.length > 2) {
         results.push({
           title,
-          month: currentMonth
+          month: currentMonth,
+          year: currentYear
         });
       }
     }
@@ -46,10 +57,8 @@ export const parseNotes = (text: string): ParsedBook[] => {
 };
 
 export const convertToBook = (parsed: ParsedBook): Omit<Book, 'id' | 'createdAt' | 'updatedAt'> => {
-  const currentYear = new Date().getFullYear();
-  // Default to the 15th of the month for simplicity
   const monthStr = parsed.month.toString().padStart(2, '0');
-  const dateStr = `${currentYear}-${monthStr}-15`;
+  const dateStr = `${parsed.year}-${monthStr}-15`;
 
   return {
     title: parsed.title,

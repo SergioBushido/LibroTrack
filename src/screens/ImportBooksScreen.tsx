@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { parseNotes, convertToBook, ParsedBook } from '../utils/parser';
 import { saveBook } from '../services/bookStorage';
+import { fetchBookCoverUrl } from '../services/bookCoverService';
 
 export const ImportBooksScreen = () => {
   const [text, setText] = useState('');
@@ -23,7 +24,7 @@ export const ImportBooksScreen = () => {
     const results = parseNotes(text);
     setPreview(results);
     if (results.length === 0) {
-      Alert.alert('Aviso', 'No se detectaron libros. Asegúrate de incluir el nombre del mes antes de la lista de libros.');
+      Alert.alert('Aviso', 'No se detectaron libros. Asegúrate de incluir el año y el nombre del mes antes de la lista de libros.');
     }
   };
 
@@ -33,10 +34,11 @@ export const ImportBooksScreen = () => {
     try {
       for (const item of preview) {
         const bookData = convertToBook(item);
-        await saveBook(bookData);
+        const coverUrl = await fetchBookCoverUrl(item.title, '');
+        await saveBook({ ...bookData, coverUrl: coverUrl ?? undefined });
       }
       Alert.alert('Éxito', `Se han importado ${preview.length} libros correctamente.`, [
-        { text: 'OK', onPress: () => navigation.navigate('BooksList') }
+        { text: 'OK', onPress: () => navigation.navigate('Biblioteca', { screen: 'BooksList' }) }
       ]);
     } catch (error) {
       Alert.alert('Error', 'Hubo un problema al importar los libros.');
@@ -51,13 +53,13 @@ export const ImportBooksScreen = () => {
 
       <Text style={[styles.title, { color: colors.ink }]}>Importar desde Notas</Text>
       <Text style={[styles.subtitle, { color: colors.ink2 }]}>
-        Pega aquí tu lista de libros agrupados por meses para añadirlos rápidamente.
+        Pega aquí tu lista de libros agrupados por años y meses para añadirlos rápidamente.
       </Text>
 
       <TextInput
         style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
         multiline
-        placeholder="Ejemplo:\nEnero\n- El Quijote\n- El Principito\nFebrero\n- Dune"
+        placeholder="Ejemplo:\n2023\nEnero\n- El Quijote\n- El Principito\nFebrero\n- Dune\n2024\nMarzo\n- Otro libro"
         placeholderTextColor={colors.ink3}
         value={text}
         onChangeText={setText}
@@ -74,7 +76,7 @@ export const ImportBooksScreen = () => {
             {preview.map((item, index) => (
               <View key={index} style={[styles.previewItem, index < preview.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
                 <Text style={[styles.itemTitle, { color: colors.ink }]}>{item.title}</Text>
-                <Text style={[styles.itemMonth, { color: colors.accent2 }]}>Mes: {item.month}</Text>
+                <Text style={[styles.itemMonth, { color: colors.accent2 }]}>{item.year} - Mes: {item.month}</Text>
               </View>
             ))}
           </View>
@@ -91,7 +93,7 @@ export const ImportBooksScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: theme.spacing.xxl,
+    paddingBottom: 120, // Espacio para el Tab Bar flotante
   },
   backBtn: {
     marginBottom: theme.spacing.m,
