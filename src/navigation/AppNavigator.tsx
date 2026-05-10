@@ -10,6 +10,7 @@ import { AddBookScreen } from '../screens/AddBookScreen';
 import { EditBookScreen } from '../screens/EditBookScreen';
 import { StatsScreen } from '../screens/StatsScreen';
 import { InternetSearchScreen } from '../screens/InternetSearchScreen';
+import { ImportBooksScreen } from '../screens/ImportBooksScreen';
 
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -28,6 +29,7 @@ const BibliotecaStack = () => (
 const AddStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="AddBookForm" component={AddBookScreen} />
+    <Stack.Screen name="ImportBooks" component={ImportBooksScreen} />
   </Stack.Navigator>
 );
 

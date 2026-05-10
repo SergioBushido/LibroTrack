@@ -71,7 +71,16 @@ export const AddBookScreen = () => {
 
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
-      <Text style={[styles.screenTitle, { color: colors.ink }]}>Añadir libro</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.screenTitle, { color: colors.ink }]}>Añadir libro</Text>
+        <TouchableOpacity 
+          style={[styles.importBtnLink, { borderColor: colors.accent2 }]} 
+          onPress={() => navigation.navigate('ImportBooks')}
+        >
+          <MaterialCommunityIcons name="file-import-outline" size={18} color={colors.accent2} />
+          <Text style={[styles.importBtnTextLink, { color: colors.accent2 }]}>Importar desde notas</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
@@ -197,7 +206,25 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     ...theme.typography.h1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: theme.spacing.l,
+  },
+  importBtnLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
+    gap: theme.spacing.xs,
+  },
+  importBtnTextLink: {
+    ...theme.typography.small,
+    fontWeight: '600',
   },
   field: {
     marginBottom: theme.spacing.m,
