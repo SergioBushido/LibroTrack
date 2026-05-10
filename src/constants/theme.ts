@@ -74,6 +74,13 @@ export const theme = {
     body: { fontSize: 16 },
     caption: { fontSize: 14 },
     small: { fontSize: 12 },
+  },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   }
 };
 
@@ -95,11 +102,4 @@ export const getGlobalStyles = (colors: ColorTheme) => StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  shadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  }
 });
