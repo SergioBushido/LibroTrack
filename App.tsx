@@ -1,17 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import { loadSampleData } from './src/services/bookStorage';
 import { theme } from './src/constants/theme';
 import { View } from 'react-native';
 
 export default function App() {
-  useEffect(() => {
-    // Carga los datos de prueba la primera vez que se abre la app
-    loadSampleData();
-  }, []);
 
   return (
     <SafeAreaProvider>
