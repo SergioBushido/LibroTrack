@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface Props {
   icon: string;
@@ -10,11 +11,13 @@ interface Props {
 }
 
 export const EmptyState: React.FC<Props> = ({ icon, title, subtitle }) => {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.container}>
-      <MaterialCommunityIcons name={icon as any} size={64} color={theme.colors.ink3} />
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
+      <MaterialCommunityIcons name={icon as any} size={64} color={colors.ink3} />
+      <Text style={[styles.title, { color: colors.ink }]}>{title}</Text>
+      <Text style={[styles.subtitle, { color: colors.ink3 }]}>{subtitle}</Text>
     </View>
   );
 };
@@ -34,7 +37,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...theme.typography.body,
-    color: theme.colors.ink3,
     marginTop: theme.spacing.s,
     textAlign: 'center',
   }

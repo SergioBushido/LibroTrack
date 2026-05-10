@@ -12,6 +12,7 @@ import { StatsScreen } from '../screens/StatsScreen';
 import { InternetSearchScreen } from '../screens/InternetSearchScreen';
 
 import { theme } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -30,24 +31,36 @@ const AddStack = () => (
   </Stack.Navigator>
 );
 
-const CustomTabBarButton = ({ children, onPress }: any) => (
-  <TouchableOpacity
-    style={styles.customAddBtn}
-    onPress={onPress}
-  >
-    <View style={styles.customAddInner}>
-      {children}
-    </View>
-  </TouchableOpacity>
-);
+const CustomTabBarButton = ({ children, onPress }: any) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      style={styles.customAddBtn}
+      onPress={onPress}
+    >
+      <View style={[styles.customAddInner, { backgroundColor: colors.accent, shadowColor: colors.accent }]}>
+        {children}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 export const AppNavigator = () => {
+  const { colors, isDark } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar, 
+          { 
+            backgroundColor: colors.cardBg, 
+            borderColor: colors.border,
+            shadowColor: isDark ? '#000' : colors.ink 
+          }
+        ],
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any = 'book';
 
@@ -60,13 +73,13 @@ export const AppNavigator = () => {
           }
 
           if (route.name === 'Añadir') {
-            return <MaterialCommunityIcons name="plus" size={32} color={theme.colors.cream} />;
+            return <MaterialCommunityIcons name="plus" size={32} color={isDark ? '#121212' : '#FFF'} />;
           }
 
           return <MaterialCommunityIcons name={iconName} size={28} color={color} />;
         },
-        tabBarActiveTintColor: theme.colors.ink,
-        tabBarInactiveTintColor: theme.colors.ink3,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.ink3,
       })}
     >
       <Tab.Screen name="Biblioteca" component={BibliotecaStack} />
@@ -90,10 +103,8 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     elevation: 0,
-    backgroundColor: theme.colors.cardBg,
     borderRadius: theme.borderRadius.xl,
     height: 70,
-    shadowColor: theme.colors.ink,
     shadowOffset: {
       width: 0,
       height: 10,
@@ -101,7 +112,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     borderWidth: 1,
-    borderColor: theme.colors.border,
   },
   customAddBtn: {
     top: -20,
@@ -112,10 +122,8 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: theme.colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: theme.colors.accent,
     shadowOffset: {
       width: 0,
       height: 4,

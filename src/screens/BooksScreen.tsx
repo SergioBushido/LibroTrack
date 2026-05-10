@@ -7,7 +7,8 @@ import { Book, Rating } from '../types/Book';
 import { getAllBooks, searchBooks, deleteBook } from '../services/bookStorage';
 import { sortBooksByEndDate } from '../utils/filters';
 import { calculateStats } from '../services/statsService';
-import { theme, globalStyles } from '../constants/theme';
+import { theme, getGlobalStyles } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { BookCard } from '../components/BookCard';
 import { EmptyState } from '../components/EmptyState';
 import { Alert } from 'react-native';
@@ -23,6 +24,8 @@ export const BooksScreen = () => {
   const [streak, setStreak] = useState(0);
   
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const globalStyles = getGlobalStyles(colors);
 
   const currentYear = new Date().getFullYear().toString();
   const nextYear = (new Date().getFullYear() + 1).toString();
@@ -104,44 +107,63 @@ export const BooksScreen = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.title}>Mi Biblioteca</Text>
-      <Text style={styles.subtitle}>{books.length} libros leídos</Text>
+      <View style={styles.titleRow}>
+        <View>
+          <Text style={[styles.title, { color: colors.ink }]}>Mi Biblioteca</Text>
+          <Text style={[styles.subtitle, { color: colors.ink3 }]}>{books.length} libros leídos</Text>
+        </View>
+        <TouchableOpacity onPress={toggleTheme} style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={24} color={colors.ink} />
+        </TouchableOpacity>
+      </View>
       
       {streak > 0 && (
-        <View style={styles.streakPill}>
-          <MaterialCommunityIcons name="fire" size={16} color={theme.colors.accent2} />
-          <Text style={styles.streakText}>Racha activa: {streak} {streak === 1 ? 'libro' : 'libros'} este mes</Text>
+        <View style={[styles.streakPill, { backgroundColor: isDark ? '#3E2A1E' : '#FFF0E5' }]}>
+          <MaterialCommunityIcons name="fire" size={16} color={colors.accent2} />
+          <Text style={[styles.streakText, { color: colors.accent2 }]}>Racha activa: {streak} {streak === 1 ? 'libro' : 'libros'} este mes</Text>
         </View>
       )}
 
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.ink3} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+        <MaterialCommunityIcons name="magnify" size={20} color={colors.ink3} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.ink }]}
           placeholder="Buscar por título, autor, notas..."
           value={query}
           onChangeText={handleSearch}
-          placeholderTextColor={theme.colors.ink3}
+          placeholderTextColor={colors.ink3}
         />
         {query.length > 0 && (
           <TouchableOpacity onPress={() => handleSearch('')}>
-            <MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.ink3} />
+            <MaterialCommunityIcons name="close-circle" size={20} color={colors.ink3} />
           </TouchableOpacity>
         )}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-        {FILTER_OPTIONS.map(filter => (
-          <TouchableOpacity
-            key={filter}
-            style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}
-            onPress={() => handleFilterPress(filter)}
-          >
-            <Text style={[styles.filterText, activeFilter === filter && styles.filterTextActive]}>
-              {filter}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {FILTER_OPTIONS.map(filter => {
+          const isActive = activeFilter === filter;
+          return (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                styles.filterChip, 
+                { 
+                  backgroundColor: isActive ? colors.ink : colors.cardBg, 
+                  borderColor: isActive ? colors.ink : colors.border 
+                }
+              ]}
+              onPress={() => handleFilterPress(filter)}
+            >
+              <Text style={[
+                styles.filterText, 
+                { color: isActive ? colors.cream : colors.ink2, fontWeight: isActive ? '600' : 'normal' }
+              ]}>
+                {filter}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -149,7 +171,7 @@ export const BooksScreen = () => {
   if (loading) {
     return (
       <View style={[globalStyles.container, styles.center]}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -192,17 +214,26 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: theme.spacing.m,
   },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.m,
+  },
   title: {
     ...theme.typography.h1,
   },
   subtitle: {
     ...theme.typography.caption,
-    marginBottom: theme.spacing.m,
+  },
+  themeBtn: {
+    padding: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
   },
   streakPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0E5',
     alignSelf: 'flex-start',
     paddingHorizontal: theme.spacing.m,
     paddingVertical: theme.spacing.s,
@@ -212,18 +243,15 @@ const styles = StyleSheet.create({
   },
   streakText: {
     ...theme.typography.small,
-    color: theme.colors.accent2,
     fontWeight: '600',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.cardBg,
     borderRadius: theme.borderRadius.m,
     paddingHorizontal: theme.spacing.m,
     height: 48,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     marginBottom: theme.spacing.m,
   },
   searchInput: {
@@ -240,19 +268,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     marginRight: theme.spacing.s,
-    backgroundColor: theme.colors.cardBg,
-  },
-  filterChipActive: {
-    backgroundColor: theme.colors.ink,
-    borderColor: theme.colors.ink,
   },
   filterText: {
     ...theme.typography.caption,
-  },
-  filterTextActive: {
-    color: theme.colors.cream,
-    fontWeight: '600',
   }
 });

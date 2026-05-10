@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface Props {
@@ -8,17 +9,18 @@ interface Props {
 }
 
 export const QuoteBlock: React.FC<Props> = ({ quote }) => {
+  const { colors } = useTheme();
   if (!quote) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.cream, borderLeftColor: colors.gold }]}>
       <MaterialCommunityIcons 
         name="format-quote-open" 
         size={32} 
-        color={theme.colors.gold} 
+        color={colors.gold} 
         style={styles.icon} 
       />
-      <Text style={styles.text}>"{quote}"</Text>
+      <Text style={[styles.text, { color: colors.ink2 }]}>"{quote}"</Text>
     </View>
   );
 };
@@ -26,8 +28,6 @@ export const QuoteBlock: React.FC<Props> = ({ quote }) => {
 const styles = StyleSheet.create({
   container: {
     borderLeftWidth: 4,
-    borderLeftColor: theme.colors.gold,
-    backgroundColor: theme.colors.cream,
     padding: theme.spacing.m,
     paddingLeft: theme.spacing.l,
     marginVertical: theme.spacing.m,
@@ -42,7 +42,6 @@ const styles = StyleSheet.create({
   text: {
     ...theme.typography.body,
     fontStyle: 'italic',
-    color: theme.colors.ink2,
     lineHeight: 24,
   }
 });

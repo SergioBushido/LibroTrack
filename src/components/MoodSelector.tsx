@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Mood } from '../types/Book';
 import { theme } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const MOODS: Mood[] = ['☀️', '🌧️', '🔥', '😴', '🤯'];
 
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export const MoodSelector: React.FC<Props> = ({ value, onChange }) => {
+  const { colors } = useTheme();
+  
   return (
     <View style={styles.container}>
       {MOODS.map(mood => (
@@ -18,7 +21,7 @@ export const MoodSelector: React.FC<Props> = ({ value, onChange }) => {
           key={mood || 'null'}
           style={[
             styles.moodBtn,
-            value === mood && styles.moodBtnSelected
+            value === mood && { backgroundColor: colors.cardBg, borderColor: colors.accent2 }
           ]}
           onPress={() => onChange(mood === value ? null : mood)}
         >
@@ -40,10 +43,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
     borderColor: 'transparent',
-  },
-  moodBtnSelected: {
-    backgroundColor: theme.colors.cardBg,
-    borderColor: theme.colors.accent2,
   },
   emoji: {
     fontSize: 24,

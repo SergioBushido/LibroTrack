@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert 
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Book, Genre, Mood, Rating } from '../types/Book';
-import { theme, globalStyles } from '../constants/theme';
+import { theme, getGlobalStyles } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { GenreSelector } from '../components/GenreSelector';
 import { MoodSelector } from '../components/MoodSelector';
 import { updateBook } from '../services/bookStorage';
@@ -15,6 +16,8 @@ export const EditBookScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const book: Book = route.params?.book;
+  const { colors, isDark } = useTheme();
+  const globalStyles = getGlobalStyles(colors);
 
   const [title, setTitle] = useState(book?.title || '');
   const [author, setAuthor] = useState(book?.author || '');
@@ -25,7 +28,6 @@ export const EditBookScreen = () => {
   const [mood, setMood] = useState<Mood>(book?.mood || null);
   const [notes, setNotes] = useState(book?.notes || '');
   const [quote, setQuote] = useState(book?.quote || '');
-
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -73,82 +75,89 @@ export const EditBookScreen = () => {
 
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Editar libro</Text>
+      <Text style={[styles.screenTitle, { color: colors.ink }]}>Editar libro</Text>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Título *</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
         <TextInput 
-          style={[styles.input, errors.title && styles.inputError]} 
+          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.title && { borderColor: colors.error }]} 
           value={title} 
           onChangeText={setTitle} 
         />
-        {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
+        {errors.title && <Text style={[styles.errorText, { color: colors.error }]}>{errors.title}</Text>}
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Autor</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Autor</Text>
         <TextInput 
-          style={styles.input} 
+          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
           value={author} 
           onChangeText={setAuthor} 
         />
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Género</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Género</Text>
         <GenreSelector value={genre} onChange={setGenre} />
       </View>
 
       <View style={styles.row}>
         <View style={[styles.field, { flex: 1, marginRight: theme.spacing.s }]}>
-          <Text style={styles.label}>Fecha inicio *</Text>
+          <Text style={[styles.label, { color: colors.ink }]}>Fecha inicio *</Text>
           <TextInput 
-            style={[styles.input, errors.startDate && styles.inputError]} 
+            style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.startDate && { borderColor: colors.error }]} 
             value={startDate} 
             onChangeText={setStartDate} 
           />
-          {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
+          {errors.startDate && <Text style={[styles.errorText, { color: colors.error }]}>{errors.startDate}</Text>}
         </View>
 
         <View style={[styles.field, { flex: 1, marginLeft: theme.spacing.s }]}>
-          <Text style={styles.label}>Fecha fin *</Text>
+          <Text style={[styles.label, { color: colors.ink }]}>Fecha fin *</Text>
           <TextInput 
-            style={[styles.input, errors.endDate && styles.inputError]} 
+            style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.endDate && { borderColor: colors.error }]} 
             value={endDate} 
             onChangeText={setEndDate} 
           />
-          {errors.endDate && <Text style={styles.errorText}>{errors.endDate}</Text>}
+          {errors.endDate && <Text style={[styles.errorText, { color: colors.error }]}>{errors.endDate}</Text>}
         </View>
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Valoración *</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Valoración *</Text>
         <View style={styles.ratingGrid}>
-          {RATINGS.map(r => (
-            <TouchableOpacity 
-              key={r} 
-              style={[
-                styles.ratingBtn, 
-                rating === r ? { backgroundColor: theme.ratingColors[r].bg, borderColor: theme.ratingColors[r].text } : {}
-              ]}
-              onPress={() => setRating(r)}
-            >
-              <Text style={[styles.ratingText, rating === r ? { color: theme.ratingColors[r].text, fontWeight: 'bold' } : {}]}>{r}</Text>
-            </TouchableOpacity>
-          ))}
+          {RATINGS.map(r => {
+            const config = theme.ratingColors[r];
+            const isSelected = rating === r;
+            const bg = isDark ? config.darkBg : config.bg;
+            const textColor = isDark ? config.darkText : config.text;
+
+            return (
+              <TouchableOpacity 
+                key={r} 
+                style={[
+                  styles.ratingBtn, 
+                  { backgroundColor: isSelected ? bg : colors.cardBg, borderColor: isSelected ? textColor : colors.border }
+                ]}
+                onPress={() => setRating(r)}
+              >
+                <Text style={[styles.ratingText, { color: isSelected ? textColor : colors.ink }]}>{r}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        {errors.rating && <Text style={styles.errorText}>{errors.rating}</Text>}
+        {errors.rating && <Text style={[styles.errorText, { color: colors.error }]}>{errors.rating}</Text>}
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Estado de ánimo</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Estado de ánimo</Text>
         <MoodSelector value={mood} onChange={setMood} />
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Notas personales</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Notas personales</Text>
         <TextInput 
-          style={[styles.input, styles.textArea]} 
+          style={[styles.input, styles.textArea, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
           value={notes} 
           onChangeText={setNotes} 
           multiline 
@@ -157,17 +166,17 @@ export const EditBookScreen = () => {
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Cita favorita</Text>
+        <Text style={[styles.label, { color: colors.ink }]}>Cita favorita</Text>
         <TextInput 
-          style={[styles.input, styles.textArea, { minHeight: 60 }]} 
+          style={[styles.input, styles.textArea, { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
           value={quote} 
           onChangeText={setQuote} 
           multiline 
         />
       </View>
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Guardar cambios</Text>
+      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.ink }]} onPress={handleSave}>
+        <Text style={[styles.saveBtnText, { color: colors.cream }]}>Guardar cambios</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -194,19 +203,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
   },
   input: {
-    backgroundColor: theme.colors.cardBg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.m,
     padding: theme.spacing.m,
     ...theme.typography.body,
   },
-  inputError: {
-    borderColor: theme.colors.error,
-  },
   errorText: {
     ...theme.typography.small,
-    color: theme.colors.error,
     marginTop: 4,
   },
   textArea: {
@@ -222,16 +225,13 @@ const styles = StyleSheet.create({
     width: '48%',
     padding: theme.spacing.m,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
-    backgroundColor: theme.colors.cardBg,
   },
   ratingText: {
     ...theme.typography.body,
   },
   saveBtn: {
-    backgroundColor: theme.colors.ink,
     padding: theme.spacing.m,
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
@@ -239,7 +239,6 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     ...theme.typography.body,
-    color: theme.colors.cream,
     fontWeight: '600',
   }
 });

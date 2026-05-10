@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import * as Linking from 'expo-linking';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme, globalStyles } from '../constants/theme';
+import { theme, getGlobalStyles } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 export const InternetSearchScreen = () => {
   const [query, setQuery] = useState('');
+  const { colors } = useTheme();
+  const globalStyles = getGlobalStyles(colors);
 
   const handleSearch = (engine: string) => {
     if (!query.trim()) return;
@@ -50,21 +53,21 @@ export const InternetSearchScreen = () => {
 
   return (
     <View style={[globalStyles.container, styles.container]}>
-      <Text style={styles.screenTitle}>Buscar en Internet</Text>
+      <Text style={[styles.screenTitle, { color: colors.ink }]}>Buscar en Internet</Text>
       
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={24} color={theme.colors.ink3} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.cardBg, borderColor: colors.accent2 }]}>
+        <MaterialCommunityIcons name="magnify" size={24} color={colors.ink3} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.ink }]}
           placeholder="Escribe el título o autor..."
           value={query}
           onChangeText={setQuery}
-          placeholderTextColor={theme.colors.ink3}
+          placeholderTextColor={colors.ink3}
           returnKeyType="search"
         />
         {query.length > 0 && (
           <TouchableOpacity onPress={() => setQuery('')}>
-            <MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.ink3} />
+            <MaterialCommunityIcons name="close-circle" size={20} color={colors.ink3} />
           </TouchableOpacity>
         )}
       </View>
@@ -73,12 +76,16 @@ export const InternetSearchScreen = () => {
         {engines.map((engine) => (
           <TouchableOpacity
             key={engine.id}
-            style={[styles.engineBtn, !query.trim() && styles.engineBtnDisabled]}
+            style={[
+              styles.engineBtn, 
+              { backgroundColor: colors.cardBg, borderColor: colors.border },
+              !query.trim() && { backgroundColor: colors.cream, borderColor: 'transparent', opacity: 0.7 }
+            ]}
             onPress={() => handleSearch(engine.id)}
             disabled={!query.trim()}
           >
-            <MaterialCommunityIcons name={engine.icon as any} size={32} color={query.trim() ? theme.colors.ink : theme.colors.ink3} />
-            <Text style={[styles.engineName, !query.trim() && { color: theme.colors.ink3 }]}>
+            <MaterialCommunityIcons name={engine.icon as any} size={32} color={query.trim() ? colors.ink : colors.ink3} />
+            <Text style={[styles.engineName, { color: query.trim() ? colors.ink : colors.ink3 }]}>
               {engine.name}
             </Text>
           </TouchableOpacity>
@@ -99,12 +106,10 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.cardBg,
     borderRadius: theme.borderRadius.m,
     paddingHorizontal: theme.spacing.m,
     height: 56,
     borderWidth: 1,
-    borderColor: theme.colors.accent2,
     marginBottom: theme.spacing.xl,
   },
   searchInput: {
@@ -119,20 +124,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.m,
   },
   engineBtn: {
-    width: '47%', // roughly half minus gap
-    backgroundColor: theme.colors.cardBg,
+    width: '47%',
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.l,
     padding: theme.spacing.l,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.s,
-  },
-  engineBtnDisabled: {
-    backgroundColor: theme.colors.cream,
-    borderColor: 'transparent',
-    opacity: 0.7,
   },
   engineName: {
     ...theme.typography.body,

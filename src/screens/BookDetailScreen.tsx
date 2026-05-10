@@ -4,7 +4,8 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Book } from '../types/Book';
-import { theme, globalStyles } from '../constants/theme';
+import { theme, getGlobalStyles } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { RatingBadge } from '../components/RatingBadge';
 import { QuoteBlock } from '../components/QuoteBlock';
 import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
@@ -14,10 +15,11 @@ export const BookDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const [book, setBook] = useState<Book>(route.params?.book);
+  const { colors } = useTheme();
+  const globalStyles = getGlobalStyles(colors);
 
   useFocusEffect(
     useCallback(() => {
-      // Reload book data when screen comes into focus
       const fetchBook = async () => {
         const books = await getAllBooks();
         const updatedBook = books.find(b => b.id === book.id);
@@ -75,77 +77,77 @@ export const BookDetailScreen = () => {
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.ink} />
+        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
       </TouchableOpacity>
 
       <View style={styles.header}>
-        {book.genre && <Text style={styles.genre}>{book.genre.toUpperCase()}</Text>}
-        <Text style={styles.title}>{book.title}</Text>
-        {book.author && <Text style={styles.author}>{book.author}</Text>}
+        {book.genre && <Text style={[styles.genre, { color: colors.accent2 }]}>{book.genre.toUpperCase()}</Text>}
+        <Text style={[styles.title, { color: colors.ink }]}>{book.title}</Text>
+        {book.author && <Text style={[styles.author, { color: colors.ink2 }]}>{book.author}</Text>}
       </View>
 
       <View style={styles.badgesContainer}>
         <RatingBadge rating={book.rating} />
         {book.mood && (
-          <View style={styles.badge}>
+          <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             <Text style={styles.moodEmoji}>{book.mood}</Text>
           </View>
         )}
-        <View style={styles.badge}>
-          <MaterialCommunityIcons name="calendar" size={16} color={theme.colors.ink3} />
-          <Text style={styles.badgeText}>{days} días</Text>
+        <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <MaterialCommunityIcons name="calendar" size={16} color={colors.ink3} />
+          <Text style={[styles.badgeText, { color: colors.ink2 }]}>{days} días</Text>
         </View>
       </View>
 
-      <View style={styles.datesGrid}>
+      <View style={[styles.datesGrid, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
         <View style={styles.dateCol}>
-          <Text style={styles.dateLabel}>INICIO</Text>
-          <Text style={styles.dateValue}>{formatShortDate(book.startDate)}</Text>
+          <Text style={[styles.dateLabel, { color: colors.ink3 }]}>INICIO</Text>
+          <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.startDate)}</Text>
         </View>
-        <View style={styles.dateDivider} />
+        <View style={[styles.dateDivider, { backgroundColor: colors.border }]} />
         <View style={styles.dateCol}>
-          <Text style={styles.dateLabel}>FIN</Text>
-          <Text style={styles.dateValue}>{formatShortDate(book.endDate)}</Text>
+          <Text style={[styles.dateLabel, { color: colors.ink3 }]}>FIN</Text>
+          <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.endDate)}</Text>
         </View>
       </View>
 
       {book.notes && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notas personales</Text>
-          <View style={styles.notesBox}>
-            <Text style={styles.notesText}>{book.notes}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Notas personales</Text>
+          <View style={[styles.notesBox, { borderLeftColor: colors.gold }]}>
+            <Text style={[styles.notesText, { color: colors.ink2 }]}>{book.notes}</Text>
           </View>
         </View>
       )}
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Cita favorita</Text>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Cita favorita</Text>
           <TouchableOpacity onPress={handleEditQuote}>
-            <MaterialCommunityIcons name={book.quote ? "pencil" : "plus"} size={20} color={theme.colors.accent2} />
+            <MaterialCommunityIcons name={book.quote ? "pencil" : "plus"} size={20} color={colors.accent2} />
           </TouchableOpacity>
         </View>
         
         {book.quote ? (
           <QuoteBlock quote={book.quote} />
         ) : (
-          <TouchableOpacity style={styles.addQuoteBtn} onPress={handleEditQuote}>
-            <Text style={styles.addQuoteText}>Añadir una cita para recordar...</Text>
+          <TouchableOpacity style={[styles.addQuoteBtn, { borderColor: colors.border }]} onPress={handleEditQuote}>
+            <Text style={[styles.addQuoteText, { color: colors.ink3 }]}>Añadir una cita para recordar...</Text>
           </TouchableOpacity>
         )}
       </View>
 
       <View style={styles.actions}>
         <TouchableOpacity 
-          style={styles.editBtn} 
+          style={[styles.editBtn, { backgroundColor: colors.ink }]} 
           onPress={() => navigation.navigate('EditBook', { book })}
         >
-          <MaterialCommunityIcons name="pencil" size={20} color={theme.colors.cream} />
-          <Text style={styles.editBtnText}>Editar libro</Text>
+          <MaterialCommunityIcons name="pencil" size={20} color={colors.cream} />
+          <Text style={[styles.editBtnText, { color: colors.cream }]}>Editar libro</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-          <MaterialCommunityIcons name="delete" size={24} color={theme.colors.error} />
+        <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.error + '20' }]} onPress={handleDelete}>
+          <MaterialCommunityIcons name="delete" size={24} color={colors.error} />
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -165,7 +167,6 @@ const styles = StyleSheet.create({
   },
   genre: {
     ...theme.typography.caption,
-    color: theme.colors.accent2,
     letterSpacing: 1,
     marginBottom: theme.spacing.xs,
   },
@@ -177,7 +178,6 @@ const styles = StyleSheet.create({
   author: {
     ...theme.typography.h3,
     fontStyle: 'italic',
-    color: theme.colors.ink2,
   },
   badgesContainer: {
     flexDirection: 'row',
@@ -189,12 +189,10 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.cardBg,
     paddingHorizontal: theme.spacing.s,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     gap: theme.spacing.xs,
   },
   moodEmoji: {
@@ -205,11 +203,9 @@ const styles = StyleSheet.create({
   },
   datesGrid: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.cardBg,
     borderRadius: theme.borderRadius.l,
     padding: theme.spacing.m,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     marginBottom: theme.spacing.xl,
   },
   dateCol: {
@@ -218,7 +214,6 @@ const styles = StyleSheet.create({
   },
   dateDivider: {
     width: 1,
-    backgroundColor: theme.colors.border,
   },
   dateLabel: {
     ...theme.typography.small,
@@ -243,7 +238,6 @@ const styles = StyleSheet.create({
   },
   notesBox: {
     borderLeftWidth: 3,
-    borderLeftColor: theme.colors.gold,
     paddingLeft: theme.spacing.m,
   },
   notesText: {
@@ -253,7 +247,6 @@ const styles = StyleSheet.create({
   addQuoteBtn: {
     padding: theme.spacing.m,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderStyle: 'dashed',
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
@@ -268,7 +261,6 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1,
-    backgroundColor: theme.colors.ink,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -278,12 +270,10 @@ const styles = StyleSheet.create({
   },
   editBtnText: {
     ...theme.typography.body,
-    color: theme.colors.cream,
     fontWeight: '600',
   },
   deleteBtn: {
     padding: theme.spacing.m,
-    backgroundColor: '#FCEBEB',
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
     justifyContent: 'center',

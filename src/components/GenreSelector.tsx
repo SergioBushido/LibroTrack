@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Genre } from '../types/Book';
 import { theme } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const GENRES: Genre[] = [
   'Novela', 'Ensayo', 'Ciencia ficción', 'Histórico', 'Poesía', 'Autobiografía', 'Terror', 'Otro'
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export const GenreSelector: React.FC<Props> = ({ value, onChange }) => {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.container}>
       {GENRES.map(genre => {
@@ -20,10 +23,16 @@ export const GenreSelector: React.FC<Props> = ({ value, onChange }) => {
         return (
           <TouchableOpacity
             key={genre}
-            style={[styles.chip, isSelected && styles.chipSelected]}
+            style={[
+              styles.chip, 
+              { backgroundColor: isSelected ? colors.ink : colors.cardBg, borderColor: isSelected ? colors.ink : colors.border }
+            ]}
             onPress={() => onChange(isSelected ? null : genre)}
           >
-            <Text style={[styles.text, isSelected && styles.textSelected]}>
+            <Text style={[
+              styles.text, 
+              { color: isSelected ? colors.cream : colors.ink2, fontWeight: isSelected ? '600' : 'normal' }
+            ]}>
               {genre}
             </Text>
           </TouchableOpacity>
@@ -45,18 +54,8 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.s,
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.cardBg,
-  },
-  chipSelected: {
-    backgroundColor: theme.colors.ink,
-    borderColor: theme.colors.ink,
   },
   text: {
     ...theme.typography.caption,
-  },
-  textSelected: {
-    color: theme.colors.cream,
-    fontWeight: '600',
   }
 });

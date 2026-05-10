@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { theme, globalStyles } from '../constants/theme';
+import { theme, getGlobalStyles } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { getAllBooks } from '../services/bookStorage';
 import { calculateStats, Stats } from '../services/statsService';
 import { RetoLectorCard } from '../components/RetoLectorCard';
@@ -10,6 +11,7 @@ import { StatsCard } from '../components/StatsCard';
 import { BarChart } from '../components/BarChart';
 import { DonutChart } from '../components/DonutChart';
 import { EmptyState } from '../components/EmptyState';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const GOAL_KEY = 'lecturas_reto_goal';
 
@@ -17,6 +19,8 @@ export const StatsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [goal, setGoal] = useState(20);
+  const { colors, isDark, toggleTheme } = useTheme();
+  const globalStyles = getGlobalStyles(colors);
 
   const loadData = async () => {
     setLoading(true);
@@ -68,7 +72,7 @@ export const StatsScreen = () => {
   if (loading) {
     return (
       <View style={[globalStyles.container, styles.center]}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -76,6 +80,12 @@ export const StatsScreen = () => {
   if (!stats || stats.totalBooks === 0) {
     return (
       <View style={globalStyles.container}>
+        <View style={styles.headerRow}>
+          <Text style={[styles.screenTitle, { color: colors.ink }]}>Estadísticas</Text>
+          <TouchableOpacity onPress={toggleTheme} style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={24} color={colors.ink} />
+          </TouchableOpacity>
+        </View>
         <EmptyState 
           icon="chart-bar" 
           title="Sin estadísticas" 
@@ -92,7 +102,12 @@ export const StatsScreen = () => {
 
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Estadísticas</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.screenTitle, { color: colors.ink }]}>Estadísticas</Text>
+        <TouchableOpacity onPress={toggleTheme} style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={24} color={colors.ink} />
+        </TouchableOpacity>
+      </View>
 
       <RetoLectorCard 
         current={retaProgress.current}
@@ -112,23 +127,23 @@ export const StatsScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Libros por mes ({new Date().getFullYear()})</Text>
+        <Text style={[styles.sectionTitle, { color: colors.ink }]}>Libros por mes ({new Date().getFullYear()})</Text>
         <BarChart data={stats.booksByMonth} />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Distribución por valoración</Text>
+        <Text style={[styles.sectionTitle, { color: colors.ink }]}>Distribución por valoración</Text>
         <DonutChart data={stats.booksByRating} />
       </View>
 
       {Object.keys(stats.booksByMood).length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Estados de ánimo</Text>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Estados de ánimo</Text>
           <View style={styles.moodsRow}>
             {Object.entries(stats.booksByMood).sort((a, b) => b[1] - a[1]).map(([mood, count]) => (
-              <View key={mood} style={styles.moodCard}>
+              <View key={mood} style={[styles.moodCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                 <Text style={styles.moodEmoji}>{mood}</Text>
-                <Text style={styles.moodCount}>{count}</Text>
+                <Text style={[styles.moodCount, { color: colors.accent }]}>{count}</Text>
               </View>
             ))}
           </View>
@@ -137,28 +152,28 @@ export const StatsScreen = () => {
 
       {(stats.fastestBook || stats.slowestBook) && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Récords</Text>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Récords</Text>
           
           {stats.fastestBook && (
-            <View style={styles.recordCard}>
-              <View style={styles.recordIconBox}>
+            <View style={[styles.recordCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              <View style={[styles.recordIconBox, { backgroundColor: colors.cream }]}>
                 <Text style={styles.recordEmoji}>⚡</Text>
               </View>
               <View style={styles.recordInfo}>
-                <Text style={styles.recordLabel}>Lectura más rápida</Text>
-                <Text style={styles.recordTitle} numberOfLines={1}>{stats.fastestBook.title}</Text>
+                <Text style={[styles.recordLabel, { color: colors.ink3 }]}>Lectura más rápida</Text>
+                <Text style={[styles.recordTitle, { color: colors.ink }]} numberOfLines={1}>{stats.fastestBook.title}</Text>
               </View>
             </View>
           )}
 
           {stats.slowestBook && (
-            <View style={[styles.recordCard, { marginTop: theme.spacing.s }]}>
-              <View style={styles.recordIconBox}>
+            <View style={[styles.recordCard, { marginTop: theme.spacing.s, backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              <View style={[styles.recordIconBox, { backgroundColor: colors.cream }]}>
                 <Text style={styles.recordEmoji}>🐢</Text>
               </View>
               <View style={styles.recordInfo}>
-                <Text style={styles.recordLabel}>Lectura más pausada</Text>
-                <Text style={styles.recordTitle} numberOfLines={1}>{stats.slowestBook.title}</Text>
+                <Text style={[styles.recordLabel, { color: colors.ink3 }]}>Lectura más pausada</Text>
+                <Text style={[styles.recordTitle, { color: colors.ink }]} numberOfLines={1}>{stats.slowestBook.title}</Text>
               </View>
             </View>
           )}
@@ -178,9 +193,19 @@ const styles = StyleSheet.create({
     padding: theme.spacing.l,
     paddingBottom: theme.spacing.xxl * 2,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.l,
+  },
   screenTitle: {
     ...theme.typography.h1,
-    marginBottom: theme.spacing.l,
+  },
+  themeBtn: {
+    padding: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
   },
   grid2x2: {
     flexDirection: 'row',
@@ -200,9 +225,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.m,
   },
   moodCard: {
-    backgroundColor: theme.colors.cardBg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.m,
     padding: theme.spacing.m,
     alignItems: 'center',
@@ -214,20 +237,16 @@ const styles = StyleSheet.create({
   },
   moodCount: {
     ...theme.typography.h3,
-    color: theme.colors.accent,
   },
   recordCard: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.cardBg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.m,
     padding: theme.spacing.m,
     alignItems: 'center',
     gap: theme.spacing.m,
   },
   recordIconBox: {
-    backgroundColor: theme.colors.cream,
     padding: theme.spacing.s,
     borderRadius: theme.borderRadius.round,
   },
