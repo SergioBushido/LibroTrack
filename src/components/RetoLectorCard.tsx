@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { FadeInView } from './FadeInView';
+import { HapticService } from '../services/HapticService';
 
 interface Props {
   current: number;
@@ -14,44 +16,76 @@ interface Props {
 
 export const RetoLectorCard: React.FC<Props> = ({ current, goal, percentage, predictionText, onEditGoal }) => {
   const { colors } = useTheme();
+  const animatedProgress = useRef(new Animated.Value(0)).current;
 
-  // Siempre oscurecido para el Reto Lector, o depende del tema si se prefiere. 
-  // Mantenemos su aspecto destacado pero adaptado al tema.
+  useEffect(() => {
+    Animated.spring(animatedProgress, {
+      toValue: percentage,
+      damping: 15,
+      stiffness: 100,
+      useNativeDriver: false, // Cannot animate width with native driver
+    }).start();
+  }, [percentage, animatedProgress]);
+
+  const progressWidth = animatedProgress.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
   const bg = colors.ink;
   const textClaro = colors.cream;
-  const progressBg = colors.ink2;
+  const progressBg = 'rgba(255,255,255,0.1)';
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }]}>
+    <FadeInView delay={0} style={[styles.container, { backgroundColor: bg }, theme.shadow.medium]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: textClaro }]}>Reto lector {new Date().getFullYear()}</Text>
-        <TouchableOpacity onPress={onEditGoal}>
-          <MaterialCommunityIcons name="pencil" size={20} color={textClaro} />
+        <View style={styles.titleGroup}>
+          <MaterialCommunityIcons name="trophy-outline" size={18} color={colors.gold} />
+          <Text style={[styles.title, { color: textClaro }]}>Reto Lector {new Date().getFullYear()}</Text>
+        </View>
+        <TouchableOpacity onPress={() => { HapticService.light(); onEditGoal(); }} style={styles.editBtn}>
+          <MaterialCommunityIcons name="pencil" size={16} color={textClaro} />
         </TouchableOpacity>
       </View>
       
       <View style={styles.content}>
-        <Text style={styles.bigText}>
+        <View style={styles.numbersRow}>
           <Text style={[styles.currentText, { color: colors.gold }]}>{current}</Text>
-          <Text style={[styles.goalText, { color: textClaro }]}> de {goal} libros</Text>
-        </Text>
+          <Text style={[styles.goalText, { color: textClaro }]}> / {goal}</Text>
+        </View>
+        <Text style={[styles.unitText, { color: textClaro, opacity: 0.6 }]}>LIBROS LEÍDOS</Text>
         
         <View style={[styles.progressContainer, { backgroundColor: progressBg }]}>
-          <View style={[styles.progressBar, { width: `${percentage}%`, backgroundColor: colors.gold }]} />
+          <Animated.View 
+            style={[
+              styles.progressBar, 
+              { 
+                width: progressWidth,
+                backgroundColor: colors.gold 
+              }
+            ]} 
+          />
         </View>
         
         <View style={styles.footer}>
-          <Text style={[styles.statsText, { color: textClaro }]}>{percentage}% completado · {Math.max(0, goal - current)} restantes</Text>
-          <Text style={[styles.predictionText, { color: colors.gold }]}>{predictionText}</Text>
+          <View style={styles.footerRow}>
+            <Text style={[styles.statsText, { color: textClaro }]}>{percentage}% completado</Text>
+            <Text style={[styles.statsText, { color: textClaro }]}>{Math.max(0, goal - current)} por leer</Text>
+          </View>
+          <View style={[styles.predictionBox, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+            <Text style={[styles.predictionText, { color: colors.gold }]}>
+              {predictionText}
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
+    </FadeInView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: theme.borderRadius.l,
+    borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.l,
     marginBottom: theme.spacing.l,
   },
@@ -59,45 +93,82 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.m,
+    marginBottom: theme.spacing.l,
+  },
+  titleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
-    ...theme.typography.h3,
+    ...theme.typography.small,
+    letterSpacing: 1,
+    fontSize: 11,
+  },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    gap: theme.spacing.m,
+    alignItems: 'center',
   },
-  bigText: {
-    textAlign: 'center',
+  numbersRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
   currentText: {
-    fontSize: 48,
-    fontWeight: 'bold',
+    fontSize: 56,
+    fontWeight: '800',
+    letterSpacing: -1,
   },
   goalText: {
     fontSize: 24,
-    opacity: 0.8,
+    fontWeight: '600',
+    opacity: 0.5,
+  },
+  unitText: {
+    ...theme.typography.small,
+    fontSize: 10,
+    marginTop: -8,
+    marginBottom: theme.spacing.l,
   },
   progressContainer: {
-    height: 8,
-    borderRadius: theme.borderRadius.round,
+    height: 12,
+    width: '100%',
+    borderRadius: 6,
     overflow: 'hidden',
+    marginBottom: theme.spacing.l,
   },
   progressBar: {
     height: '100%',
-    borderRadius: theme.borderRadius.round,
+    borderRadius: 6,
   },
   footer: {
-    gap: theme.spacing.xs,
+    width: '100%',
+    gap: 12,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   statsText: {
     ...theme.typography.small,
+    fontSize: 10,
     opacity: 0.8,
-    textAlign: 'center',
+  },
+  predictionBox: {
+    padding: 10,
+    borderRadius: theme.borderRadius.m,
+    alignItems: 'center',
   },
   predictionText: {
-    ...theme.typography.small,
+    ...theme.typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
-    fontWeight: '500',
   }
 });

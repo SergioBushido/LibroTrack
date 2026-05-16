@@ -13,6 +13,8 @@ export type ColorTheme = {
   cardBg: string;
   border: string;
   error: string;
+  glass: string;
+  glassBorder: string;
 };
 
 export const lightColors: ColorTheme = {
@@ -26,23 +28,27 @@ export const lightColors: ColorTheme = {
   green: '#4A7C59',
   blue: '#3A5F8B',
   cardBg: '#FDFAF6',
-  border: 'rgba(26,23,20,0.12)',
+  border: 'rgba(26,23,20,0.08)',
   error: '#D32F2F',
+  glass: 'rgba(255, 255, 255, 0.7)',
+  glassBorder: 'rgba(255, 255, 255, 0.3)',
 };
 
 export const darkColors: ColorTheme = {
-  cream: '#121212', // Background principal oscuro
-  ink: '#F7F4EF',   // Textos principales claros
-  ink2: '#E0DCD6',  // Textos secundarios
-  ink3: '#8a8480',  // Textos terciarios (mismo tono o ligeramente más claro)
-  accent: '#E57373', // Acento rojo más claro
-  accent2: '#E29C74', // Acento naranja más claro
-  gold: '#DDBB5C',   // Oro más brillante para destacar en oscuro
-  green: '#66A678',
-  blue: '#6B90B5',
-  cardBg: '#1E1E1E', // Fondo de tarjetas oscuro
-  border: 'rgba(255,255,255,0.12)', // Bordes claros translúcidos
+  cream: '#0F0F0F',
+  ink: '#F7F4EF',
+  ink2: '#B0ADA8',
+  ink3: '#6E6A66',
+  accent: '#E57373',
+  accent2: '#E29C74',
+  gold: '#DDBB5C',
+  green: '#81C784',
+  blue: '#64B5F6',
+  cardBg: '#1A1A1A',
+  border: 'rgba(255, 255, 255, 0.05)',
   error: '#EF5350',
+  glass: 'rgba(26, 26, 26, 0.7)',
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
 };
 
 export const theme = {
@@ -61,30 +67,45 @@ export const theme = {
     xxl: 48,
   },
   borderRadius: {
-    s: 4,
-    m: 8,
-    l: 12,
-    xl: 16,
+    s: 6,
+    m: 10,
+    l: 16,
+    xl: 24,
     round: 9999,
   },
   typography: {
-    h1: { fontSize: 28, fontWeight: '700' as const },
-    h2: { fontSize: 22, fontWeight: '600' as const },
+    h1: { fontSize: 32, fontWeight: '800' as const, letterSpacing: -0.5 },
+    h2: { fontSize: 24, fontWeight: '700' as const, letterSpacing: -0.3 },
     h3: { fontSize: 18, fontWeight: '600' as const },
-    body: { fontSize: 16 },
-    caption: { fontSize: 14 },
-    small: { fontSize: 12 },
+    body: { fontSize: 16, lineHeight: 24 },
+    caption: { fontSize: 14, lineHeight: 20 },
+    small: { fontSize: 12, fontWeight: '600' as const, textTransform: 'uppercase' as const, letterSpacing: 1 },
   },
   shadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    soft: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    medium: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
+      elevation: 6,
+    },
+    accent: (color: string) => ({
+      shadowColor: color,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
+    }),
   }
 };
 
-// Función para generar estilos globales dinámicos
 export const getGlobalStyles = (colors: ColorTheme) => StyleSheet.create({
   container: {
     flex: 1,
@@ -96,10 +117,13 @@ export const getGlobalStyles = (colors: ColorTheme) => StyleSheet.create({
     padding: theme.spacing.m,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...theme.shadow.soft,
   },
+  glassCard: {
+    backgroundColor: colors.glass,
+    borderRadius: theme.borderRadius.l,
+    padding: theme.spacing.m,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+  }
 });

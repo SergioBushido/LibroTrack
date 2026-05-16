@@ -7,13 +7,15 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { searchBooksOnGoogle, SearchResult } from '../services/internetSearchService';
+import { HapticService } from '../services/HapticService';
+import { FadeInView } from '../components/FadeInView';
 
 export const InternetSearchScreen = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export const InternetSearchScreen = () => {
       } else {
         setResults([]);
       }
-    }, 600);
+    }, 800);
 
     return () => clearTimeout(delayDebounceFn);
   }, [query]);
@@ -41,38 +43,26 @@ export const InternetSearchScreen = () => {
   };
 
   const handleExternalSearch = (engine: string) => {
+    HapticService.light();
     if (!query.trim()) return;
     
     const encodedQuery = encodeURIComponent(query.trim());
     let url = '';
 
     switch (engine) {
-      case 'google':
-        url = `https://www.google.com/search?q=${encodedQuery}+libro`;
-        break;
-      case 'googlebooks':
-        url = `https://books.google.com/books?q=${encodedQuery}`;
-        break;
-      case 'wikipedia':
-        url = `https://es.wikipedia.org/wiki/Special:Search?search=${encodedQuery}`;
-        break;
-      case 'amazon':
-        url = `https://www.amazon.es/s?k=${encodedQuery}+libro`;
-        break;
-      case 'casadellibro':
-        url = `https://www.casadellibro.com/busqueda-generica?busqueda=${encodedQuery}`;
-        break;
-      case 'goodreads':
-        url = `https://www.goodreads.com/search?q=${encodedQuery}`;
-        break;
-      default:
-        return;
+      case 'google': url = `https://www.google.com/search?q=${encodedQuery}+libro`; break;
+      case 'googlebooks': url = `https://books.google.com/books?q=${encodedQuery}`; break;
+      case 'wikipedia': url = `https://es.wikipedia.org/wiki/Special:Search?search=${encodedQuery}`; break;
+      case 'amazon': url = `https://www.amazon.es/s?k=${encodedQuery}+libro`; break;
+      case 'casadellibro': url = `https://www.casadellibro.com/busqueda-generica?busqueda=${encodedQuery}`; break;
+      case 'goodreads': url = `https://www.goodreads.com/search?q=${encodedQuery}`; break;
     }
 
-    Linking.openURL(url);
+    if (url) Linking.openURL(url);
   };
 
   const handleAddToLibrary = (book: SearchResult) => {
+    HapticService.success();
     navigation.navigate('AddBook', {
       title: book.title,
       author: book.author,
@@ -90,11 +80,13 @@ export const InternetSearchScreen = () => {
   ];
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
-      <Text style={[styles.screenTitle, { color: colors.ink }]}>Buscar en Internet</Text>
+    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <FadeInView delay={0}>
+        <Text style={[styles.screenTitle, { color: colors.ink }]}>Descubrir</Text>
+      </FadeInView>
       
-      <View style={[styles.searchContainer, { backgroundColor: colors.cardBg, borderColor: colors.accent2 }]}>
-        <MaterialCommunityIcons name="magnify" size={24} color={colors.ink3} />
+      <FadeInView delay={100} style={[styles.searchContainer, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+        <MaterialCommunityIcons name="magnify" size={22} color={colors.ink3} />
         <TextInput
           style={[styles.searchInput, { color: colors.ink }]}
           placeholder="Escribe el título o autor..."
@@ -105,26 +97,30 @@ export const InternetSearchScreen = () => {
           onSubmitEditing={handleLocalSearch}
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => { setQuery(''); setResults([]); }}>
+          <TouchableOpacity onPress={() => { HapticService.light(); setQuery(''); setResults([]); }}>
             <MaterialCommunityIcons name="close-circle" size={20} color={colors.ink3} />
           </TouchableOpacity>
         )}
-      </View>
+      </FadeInView>
 
       {isLoading && (
         <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={{ color: colors.ink3, marginTop: 10 }}>Buscando libros...</Text>
+          <ActivityIndicator size="small" color={colors.accent2} />
+          <Text style={{ color: colors.ink3, marginTop: 12, ...theme.typography.small }}>Buscando en Google Books...</Text>
         </View>
       )}
 
       {results.length > 0 && (
         <View style={styles.resultsSection}>
           <Text style={[styles.sectionTitle, { color: colors.ink }]}>Sugerencias</Text>
-          {results.map((book) => (
-            <View key={book.id} style={[styles.resultCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          {results.map((book, index) => (
+            <FadeInView 
+              key={book.id} 
+              delay={200 + index * 100}
+              style={[styles.resultCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
               {book.coverUrl ? (
-                <Image source={{ uri: book.coverUrl }} style={styles.resultCover} resizeMode="contain" />
+                <Image source={{ uri: book.coverUrl }} style={styles.resultCover} resizeMode="cover" />
               ) : (
                 <View style={[styles.resultCover, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
                   <MaterialCommunityIcons name="book-open-variant" size={24} color={colors.ink3} />
@@ -134,40 +130,40 @@ export const InternetSearchScreen = () => {
                 <Text style={[styles.resultTitle, { color: colors.ink }]} numberOfLines={2}>{book.title}</Text>
                 <Text style={[styles.resultAuthor, { color: colors.ink3 }]} numberOfLines={1}>{book.author}</Text>
                 <TouchableOpacity 
-                  style={[styles.addBtn, { backgroundColor: colors.accent }]}
+                  style={[styles.addBtn, { backgroundColor: colors.ink }]}
                   onPress={() => handleAddToLibrary(book)}
                 >
-                  <MaterialCommunityIcons name="plus" size={16} color="#FFF" />
-                  <Text style={styles.addBtnText}>Añadir como leído</Text>
+                  <MaterialCommunityIcons name="plus" size={16} color={colors.cream} />
+                  <Text style={[styles.addBtnText, { color: colors.cream }]}>Añadir</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </FadeInView>
           ))}
         </View>
       )}
 
-      <View style={styles.enginesSection}>
-        <Text style={[styles.sectionTitle, { color: colors.ink }]}>Otros buscadores</Text>
+      <FadeInView delay={300} style={styles.enginesSection}>
+        <Text style={[styles.sectionTitle, { color: colors.ink }]}>Buscadores externos</Text>
         <View style={styles.grid}>
-          {engines.map((engine) => (
+          {engines.map((engine, index) => (
             <TouchableOpacity
               key={engine.id}
               style={[
                 styles.engineBtn, 
                 { backgroundColor: colors.cardBg, borderColor: colors.border },
-                !query.trim() && { backgroundColor: colors.cream, borderColor: 'transparent', opacity: 0.7 }
+                !query.trim() && { opacity: 0.5 }
               ]}
               onPress={() => handleExternalSearch(engine.id)}
               disabled={!query.trim()}
             >
-              <MaterialCommunityIcons name={engine.icon as any} size={32} color={query.trim() ? colors.ink : colors.ink3} />
+              <MaterialCommunityIcons name={engine.icon as any} size={28} color={query.trim() ? colors.accent2 : colors.ink3} />
               <Text style={[styles.engineName, { color: query.trim() ? colors.ink : colors.ink3 }]}>
                 {engine.name}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </FadeInView>
     </ScrollView>
   );
 };
@@ -175,26 +171,27 @@ export const InternetSearchScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: 120, // Espacio para el Tab Bar flotante
+    paddingBottom: 150,
   },
   screenTitle: {
     ...theme.typography.h1,
-    marginBottom: theme.spacing.l,
+    marginBottom: theme.spacing.xl,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: theme.borderRadius.m,
+    borderRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing.m,
-    height: 56,
+    height: 60,
     borderWidth: 1,
-    marginBottom: theme.spacing.l,
+    marginBottom: theme.spacing.xl,
+    ...theme.shadow.soft,
   },
   searchInput: {
     flex: 1,
     marginLeft: theme.spacing.s,
     ...theme.typography.body,
-    fontSize: 18,
+    fontSize: 16,
   },
   loaderContainer: {
     alignItems: 'center',
@@ -204,9 +201,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   sectionTitle: {
-    ...theme.typography.caption,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    ...theme.typography.small,
     marginBottom: theme.spacing.m,
     letterSpacing: 1,
   },
@@ -216,12 +211,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: theme.spacing.m,
     marginBottom: theme.spacing.m,
-    ...theme.shadow,
+    ...theme.shadow.soft,
+    overflow: 'hidden',
   },
   resultCover: {
     width: 60,
     height: 90,
-    borderRadius: theme.borderRadius.s,
+    borderRadius: theme.borderRadius.m,
   },
   resultInfo: {
     flex: 1,
@@ -235,21 +231,21 @@ const styles = StyleSheet.create({
   },
   resultAuthor: {
     ...theme.typography.small,
-    marginBottom: theme.spacing.s,
+    marginBottom: theme.spacing.m,
+    textTransform: 'none',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: theme.spacing.m,
-    paddingVertical: theme.spacing.s,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: theme.borderRadius.round,
     gap: 4,
   },
   addBtnText: {
-    color: '#FFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   enginesSection: {
     marginTop: theme.spacing.s,
@@ -260,17 +256,20 @@ const styles = StyleSheet.create({
     gap: theme.spacing.m,
   },
   engineBtn: {
-    width: '47%',
+    width: '47.5%',
+    height: 100,
     borderWidth: 1,
-    borderRadius: theme.borderRadius.l,
-    padding: theme.spacing.l,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.m,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.s,
+    ...theme.shadow.soft,
   },
   engineName: {
-    ...theme.typography.body,
-    fontWeight: '600',
+    ...theme.typography.small,
+    fontSize: 11,
     textAlign: 'center',
+    textTransform: 'none',
   }
 });

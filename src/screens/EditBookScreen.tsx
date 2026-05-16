@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -49,23 +49,35 @@ export const EditBookScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleFetchPreview = async () => {
+  const handleFetchPreview = async (silent = false) => {
     if (!title.trim()) {
-      Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
+      if (!silent) Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
       return;
     }
     setIsFetchingCover(true);
     try {
       const { fetchBookCoverUrl } = await import('../services/bookCoverService');
       const url = await fetchBookCoverUrl(title.trim(), author.trim());
-      setCoverUrl(url || '');
-      setImageError(false);
+      if (url || !silent) {
+        setCoverUrl(url || '');
+        setImageError(false);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setIsFetchingCover(false);
     }
   };
+
+  useEffect(() => {
+    if (!title.trim()) return;
+
+    const timeoutId = setTimeout(() => {
+      handleFetchPreview(true);
+    }, 1200);
+
+    return () => clearTimeout(timeoutId);
+  }, [title, author]);
 
   const handleSave = async () => {
     if (!validate()) {
@@ -118,7 +130,7 @@ export const EditBookScreen = () => {
         )}
         <TouchableOpacity 
           style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]} 
-          onPress={handleFetchPreview}
+          onPress={() => handleFetchPreview(false)}
           disabled={isFetchingCover}
         >
           {isFetchingCover ? (

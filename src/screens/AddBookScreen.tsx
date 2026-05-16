@@ -61,21 +61,33 @@ export const AddBookScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleFetchPreview = async () => {
+  const handleFetchPreview = async (silent = false) => {
     if (!title.trim()) {
-      Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
+      if (!silent) Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
       return;
     }
     setIsFetchingCover(true);
     try {
       const url = await fetchBookCoverUrl(title.trim(), author.trim());
-      setPreviewCoverUrl(url);
+      if (url || !silent) {
+        setPreviewCoverUrl(url);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setIsFetchingCover(false);
     }
   };
+
+  useEffect(() => {
+    if (!title.trim()) return;
+
+    const timeoutId = setTimeout(() => {
+      handleFetchPreview(true);
+    }, 1200);
+
+    return () => clearTimeout(timeoutId);
+  }, [title, author]);
 
   const handleSave = async () => {
     if (!validate()) {
@@ -143,7 +155,7 @@ export const AddBookScreen = () => {
         )}
         <TouchableOpacity 
           style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]} 
-          onPress={handleFetchPreview}
+          onPress={() => handleFetchPreview(false)}
           disabled={isFetchingCover}
         >
           {isFetchingCover ? (

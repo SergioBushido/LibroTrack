@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Animated, { FadeIn, FadeInDown, FadeOut, Layout } from 'react-native-reanimated';
 import { Book, Rating } from '../types/Book';
 import { getAllBooks, deleteBook, updateBook } from '../services/bookStorage';
 import { sortBooksByEndDate } from '../utils/filters';
@@ -12,9 +13,12 @@ import { useTheme } from '../context/ThemeContext';
 import { BookCard } from '../components/BookCard';
 import { EmptyState } from '../components/EmptyState';
 import { fetchBookCoverUrl } from '../services/bookCoverService';
-import { Alert, ImageBackground, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QuickStat } from '../components/QuickStat';
+import { RatingBadge } from '../components/RatingBadge';
+import { BookCardSkeleton, SkeletonLoader } from '../components/SkeletonLoader';
+import { HapticService } from '../services/HapticService';
+import { FadeInView } from '../components/FadeInView';
 
 const GOAL_KEY = 'lecturas_reto_goal';
 
@@ -59,7 +63,6 @@ export const BooksScreen = () => {
       grouped[year].push(book);
     });
 
-    // Sort years descending
     const sortedYears = Object.keys(grouped).sort((a, b) => parseInt(b) - parseInt(a));
     
     return sortedYears.map(year => ({
@@ -68,13 +71,12 @@ export const BooksScreen = () => {
     }));
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const allBooks = await getAllBooks();
     const sortedBooks = sortBooksByEndDate(allBooks, false);
     setBooks(sortedBooks);
     
-    // Calcular racha
     const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
     const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
     setGoal(currentGoal);
@@ -87,13 +89,15 @@ export const BooksScreen = () => {
     }
 
     applyFilters(sortedBooks, query, activeFilter);
-    setLoading(false);
+    if (!silent) {
+      setTimeout(() => setLoading(false), 500); // Artificial delay for smoother transition
+    }
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [])
+      loadData(books.length > 0);
+    }, [books.length])
   );
 
   const applyFilters = (sourceBooks: Book[], searchQuery: string, filter: FilterType) => {
@@ -126,11 +130,13 @@ export const BooksScreen = () => {
   };
 
   const handleFilterPress = (filter: FilterType) => {
+    HapticService.selection();
     setActiveFilter(filter);
     applyFilters(books, query, filter);
   };
 
   const handleDelete = (id: string) => {
+    HapticService.error();
     Alert.alert(
       "Eliminar libro",
       "¿Estás seguro de que quieres eliminar este libro de tu biblioteca?",
@@ -141,7 +147,8 @@ export const BooksScreen = () => {
           style: "destructive",
           onPress: async () => {
             await deleteBook(id);
-            loadData();
+            HapticService.success();
+            loadData(true);
           }
         }
       ]
@@ -149,6 +156,7 @@ export const BooksScreen = () => {
   };
 
   const handleFetchMissingCovers = async () => {
+    HapticService.light();
     setUpdatingCovers(true);
     try {
       const allBooks = await getAllBooks();
@@ -163,7 +171,8 @@ export const BooksScreen = () => {
         }
       }
 
-      await loadData();
+      await loadData(true);
+      HapticService.success();
       Alert.alert(
         'Portadas actualizadas',
         `Se han encontrado ${updatedCount} nuevas portadas de ${missingCoverBooks.length} libros sin imágenes.`
@@ -179,42 +188,59 @@ export const BooksScreen = () => {
     <View style={styles.header}>
       <View style={styles.titleRow}>
         <View>
-          <Text style={[styles.welcomeText, { color: colors.ink3 }]}>Hola de nuevo,</Text>
-          <Text style={[styles.title, { color: colors.ink }]}>Mi Biblioteca</Text>
+          <Text style={[styles.welcomeText, { color: colors.ink3 }]}>Mis lecturas</Text>
+          <View style={styles.titleWithBadge}>
+            <Text style={[styles.title, { color: colors.ink }]}>LibroTrack</Text>
+            <View style={[styles.totalBadge, { backgroundColor: colors.accent + '20' }]}>
+              <Text style={[styles.totalBadgeText, { color: colors.accent }]}>{books.length}</Text>
+            </View>
+          </View>
         </View>
-        <TouchableOpacity onPress={toggleTheme} style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-          <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={24} color={colors.ink} />
+        <TouchableOpacity 
+          onPress={() => { HapticService.light(); toggleTheme(); }} 
+          style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+        >
+          <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={22} color={colors.ink} />
         </TouchableOpacity>
       </View>
       
-      {/* Hero Section: Última Lectura */}
       {!selectedYear && lastBook && query === '' && activeFilter === 'Todos' && (
-        <TouchableOpacity 
-          style={[styles.heroCard, { backgroundColor: colors.ink }]}
-          onPress={() => navigation.navigate('BookDetail', { id: lastBook.id, book: lastBook })}
-        >
-          {lastBook.coverUrl ? (
-            <Image source={{ uri: lastBook.coverUrl }} style={styles.heroCover} resizeMode="contain" />
-          ) : (
-            <View style={[styles.heroCover, { backgroundColor: colors.ink2, justifyContent: 'center', alignItems: 'center' }]}>
-              <MaterialCommunityIcons name="book-open-variant" size={40} color={colors.cream} />
+        <FadeInView delay={200}>
+          <TouchableOpacity 
+            activeOpacity={0.9}
+            style={[styles.heroCard, { backgroundColor: colors.ink }]}
+            onPress={() => { HapticService.light(); navigation.navigate('BookDetail', { id: lastBook.id, book: lastBook }); }}
+          >
+            <View style={styles.heroContent}>
+              <View style={styles.heroInfo}>
+                <View style={styles.heroBadge}>
+                  <Text style={styles.heroBadgeText}>ÚLTIMA LECTURA</Text>
+                </View>
+                <Text style={[styles.heroTitle, { color: colors.cream }]} numberOfLines={2}>{lastBook.title}</Text>
+                <Text style={[styles.heroAuthor, { color: 'rgba(247,244,239,0.7)' }]}>{lastBook.author}</Text>
+                <View style={styles.heroFooter}>
+                   <RatingBadge rating={lastBook.rating} mini />
+                   <View style={styles.heroDots}>
+                     <View style={[styles.dot, { backgroundColor: colors.gold }]} />
+                     <View style={[styles.dot, { backgroundColor: 'rgba(255,255,255,0.2)' }]} />
+                     <View style={[styles.dot, { backgroundColor: 'rgba(255,255,255,0.2)' }]} />
+                   </View>
+                </View>
+              </View>
+              <View style={styles.heroCoverContainer}>
+                {lastBook.coverUrl ? (
+                  <Image source={{ uri: lastBook.coverUrl }} style={styles.heroCover} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.heroCover, { backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }]}>
+                    <MaterialCommunityIcons name="book-open-variant" size={30} color={colors.cream} />
+                  </View>
+                )}
+              </View>
             </View>
-          )}
-          <View style={styles.heroInfo}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>ÚLTIMA LECTURA</Text>
-            </View>
-            <Text style={[styles.heroTitle, { color: colors.cream }]} numberOfLines={2}>{lastBook.title}</Text>
-            <Text style={[styles.heroAuthor, { color: 'rgba(247,244,239,0.7)' }]}>{lastBook.author}</Text>
-            <View style={styles.heroRating}>
-              <MaterialCommunityIcons name="star" size={16} color={colors.gold} />
-              <Text style={[styles.heroRatingText, { color: colors.gold }]}>{lastBook.rating}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </FadeInView>
       )}
 
-      {/* Quick Stats Bar */}
       {!selectedYear && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsBar}>
           <QuickStat 
@@ -242,13 +268,13 @@ export const BooksScreen = () => {
         <MaterialCommunityIcons name="magnify" size={20} color={colors.ink3} />
         <TextInput
           style={[styles.searchInput, { color: colors.ink }]}
-          placeholder="Busca un título, autor..."
+          placeholder="Busca en tu biblioteca..."
           value={query}
           onChangeText={handleSearch}
           placeholderTextColor={colors.ink3}
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => handleSearch('')}>
+          <TouchableOpacity onPress={() => { HapticService.light(); handleSearch(''); }}>
             <MaterialCommunityIcons name="close-circle" size={20} color={colors.ink3} />
           </TouchableOpacity>
         )}
@@ -260,6 +286,7 @@ export const BooksScreen = () => {
           return (
             <TouchableOpacity
               key={filter}
+              activeOpacity={0.7}
               style={[
                 styles.filterChip, 
                 { 
@@ -271,7 +298,7 @@ export const BooksScreen = () => {
             >
               <Text style={[
                 styles.filterText, 
-                { color: isActive ? colors.cream : colors.ink2, fontWeight: isActive ? '600' : 'normal' }
+                { color: isActive ? colors.cream : colors.ink2, fontWeight: isActive ? '700' : '500' }
               ]}>
                 {filter}
               </Text>
@@ -279,96 +306,111 @@ export const BooksScreen = () => {
           );
         })}
       </ScrollView>
-
-      <TouchableOpacity
-        style={[styles.coverButton, { backgroundColor: updatingCovers ? colors.border : 'transparent', borderColor: colors.accent, borderWidth: 1 }]}
-        onPress={handleFetchMissingCovers}
-        disabled={updatingCovers}
-      >
-        <Text style={[styles.coverButtonText, { color: colors.accent }]}> 
-          <MaterialCommunityIcons name="image-search-outline" size={16} /> {updatingCovers ? 'Buscando portadas...' : 'Actualizar portadas'} 
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 
-  const selectedSection = selectedYear ? bookSections.find(section => section.title === selectedYear) : null;
-
-  const handleYearSelect = (year: string) => {
-    setSelectedYear(year);
-  };
-
-  const handleBackToYears = () => setSelectedYear(null);
-
   if (loading) {
     return (
-      <View style={[globalStyles.container, styles.center]}>
-        <ActivityIndicator size="large" color={colors.accent} />
+      <View style={globalStyles.container}>
+        <ScrollView contentContainerStyle={styles.listContent}>
+          <View style={styles.header}>
+            <SkeletonLoader width={150} height={40} style={{ marginBottom: 20 }} />
+            <SkeletonLoader width="100%" height={160} borderRadius={20} style={{ marginBottom: 20 }} />
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <SkeletonLoader width={100} height={50} borderRadius={10} />
+              <SkeletonLoader width={100} height={50} borderRadius={10} />
+              <SkeletonLoader width={100} height={50} borderRadius={10} />
+            </View>
+          </View>
+          <BookCardSkeleton />
+          <BookCardSkeleton />
+        </ScrollView>
       </View>
     );
   }
 
+  const handleYearSelect = (year: string) => {
+    HapticService.light();
+    setSelectedYear(year);
+  };
+
+  const handleBackToYears = () => {
+    HapticService.light();
+    setSelectedYear(null);
+  };
+
+  const selectedSection = selectedYear ? bookSections.find(section => section.title === selectedYear) : null;
+
   return (
     <View style={globalStyles.container}>
-      <ScrollView contentContainerStyle={styles.listContent}>
+      <ScrollView 
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
         {renderHeader()}
 
         {selectedYear ? (
-          <View style={styles.yearDetailHeader}>
-            <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}> 
-              <MaterialCommunityIcons name="arrow-left" size={20} color={colors.ink} />
-              <Text style={[styles.backYearText, { color: colors.ink }]}>Volver a años</Text>
-            </TouchableOpacity>
-            <Text style={[styles.detailTitle, { color: colors.ink }]}>Libros leídos en {selectedYear}</Text>
-          </View>
-        ) : (
-          <Text style={[styles.sectionLabel, { color: colors.ink }]}>
-            Selecciona un año para explorar
-          </Text>
-        )}
-
-        {selectedYear ? (
-          selectedSection && selectedSection.data.length > 0 ? (
-            selectedSection.data.map(book => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onPress={() => navigation.navigate('BookDetail', { id: book.id, book })}
-                onEdit={() => navigation.navigate('EditBook', { book })}
-                onDelete={() => handleDelete(book.id)}
+          <FadeInView delay={0}>
+            <View style={styles.yearDetailHeader}>
+              <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}> 
+                <MaterialCommunityIcons name="arrow-left" size={20} color={colors.ink} />
+                <Text style={[styles.backYearText, { color: colors.ink }]}>Volver</Text>
+              </TouchableOpacity>
+              <Text style={[styles.detailTitle, { color: colors.ink }]}>{selectedYear}</Text>
+            </View>
+            
+            {selectedSection && selectedSection.data.length > 0 ? (
+              selectedSection.data.map((book, index) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  index={index}
+                  onPress={() => navigation.navigate('BookDetail', { id: book.id, book })}
+                  onEdit={() => navigation.navigate('EditBook', { book })}
+                  onDelete={() => handleDelete(book.id)}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon="book-open-blank-variant"
+                title="No hay libros"
+                subtitle="No hay lecturas registradas para este filtro."
               />
-            ))
-          ) : (
-            <EmptyState
-              icon="book-open-blank-variant"
-              title="No se encontraron libros"
-              subtitle="Cambia los filtros o vuelve a seleccionar otro año."
-            />
-          )
+            )}
+          </FadeInView>
         ) : (
           <View style={styles.yearGrid}>
+            <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>HISTORIAL POR AÑOS</Text>
             {bookSections.map((section, index) => (
-              <TouchableOpacity
-                key={section.title}
-                style={[
-                  styles.yearCard, 
-                  { 
-                    backgroundColor: colors.cardBg, 
-                    borderColor: colors.border,
-                    marginTop: index === 0 ? 0 : 0 
-                  }
-                ]}
-                onPress={() => handleYearSelect(section.title)}
-              >
-                <View style={styles.yearCardHeader}>
-                  <Text style={[styles.yearTitle, { color: colors.ink }]}>{section.title}</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color={colors.ink3} />
-                </View>
-                <Text style={[styles.yearCount, { color: colors.accent2 }]}>
-                  {section.data.length} {section.data.length === 1 ? 'libro leído' : 'libros leídos'}
-                </Text>
-              </TouchableOpacity>
+              <FadeInView key={section.title} delay={index * 100}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.yearCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                  onPress={() => handleYearSelect(section.title)}
+                >
+                  <View style={styles.yearCardLeft}>
+                    <Text style={[styles.yearTitle, { color: colors.ink }]}>{section.title}</Text>
+                    <Text style={[styles.yearCount, { color: colors.accent2 }]}>
+                      {section.data.length} {section.data.length === 1 ? 'libro' : 'libros'}
+                    </Text>
+                  </View>
+                  <View style={[styles.yearIcon, { backgroundColor: colors.cream }]}>
+                    <MaterialCommunityIcons name="chevron-right" size={24} color={colors.ink} />
+                  </View>
+                </TouchableOpacity>
+              </FadeInView>
             ))}
+            
+            <TouchableOpacity
+              style={[styles.coverButton, { borderColor: colors.border, borderWidth: 1 }]}
+              onPress={handleFetchMissingCovers}
+              disabled={updatingCovers}
+            >
+              <Text style={[styles.coverButtonText, { color: colors.ink3 }]}> 
+                <MaterialCommunityIcons name="image-sync" size={14} /> 
+                {updatingCovers ? ' ACTUALIZANDO...' : ' SINCRONIZAR PORTADAS'} 
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -377,13 +419,9 @@ export const BooksScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   listContent: {
     padding: theme.spacing.m,
-    paddingBottom: 120, // Espacio para el Tab Bar flotante
+    paddingBottom: 120,
   },
   header: {
     marginBottom: theme.spacing.m,
@@ -392,81 +430,103 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.m,
+    marginBottom: theme.spacing.l,
   },
   title: {
     ...theme.typography.h1,
-    fontSize: 32,
   },
   welcomeText: {
-    ...theme.typography.caption,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...theme.typography.caption,
+    ...theme.typography.small,
+    marginBottom: 4,
   },
   themeBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
+    ...theme.shadow.soft,
+  },
+  titleWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  totalBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  totalBadgeText: {
+    ...theme.typography.small,
+    fontSize: 12,
+    fontWeight: '800',
   },
   heroCard: {
-    flexDirection: 'row',
     borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.m,
+    padding: theme.spacing.l,
     marginBottom: theme.spacing.l,
     overflow: 'hidden',
-    ...theme.shadow,
-    elevation: 8,
+    ...theme.shadow.medium,
   },
-  heroCover: {
-    width: 100,
-    height: 150,
-    borderRadius: theme.borderRadius.m,
+  heroContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   heroInfo: {
     flex: 1,
-    marginLeft: theme.spacing.l,
-    justifyContent: 'center',
+    paddingRight: theme.spacing.m,
   },
   heroBadge: {
     backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: theme.spacing.s,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.s,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     alignSelf: 'flex-start',
-    marginBottom: theme.spacing.s,
+    marginBottom: 12,
   },
   heroBadgeText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     letterSpacing: 1,
   },
   heroTitle: {
     ...theme.typography.h2,
-    fontWeight: '700',
+    fontSize: 22,
     lineHeight: 28,
   },
   heroAuthor: {
     ...theme.typography.body,
+    fontSize: 14,
     marginTop: 4,
+    opacity: 0.8,
   },
-  heroRating: {
+  heroFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: theme.spacing.m,
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  heroDots: {
+    flexDirection: 'row',
     gap: 4,
   },
-  heroRatingText: {
-    fontWeight: '700',
-    fontSize: 14,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  heroCoverContainer: {
+    ...theme.shadow.medium,
+  },
+  heroCover: {
+    width: 90,
+    height: 135,
+    borderRadius: theme.borderRadius.s,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   statsBar: {
     marginBottom: theme.spacing.l,
@@ -481,63 +541,98 @@ const styles = StyleSheet.create({
     height: 52,
     borderWidth: 1,
     marginBottom: theme.spacing.m,
+    ...theme.shadow.soft,
   },
   searchInput: {
     flex: 1,
     marginLeft: theme.spacing.s,
     ...theme.typography.body,
+    fontSize: 15,
   },
   filtersScroll: {
     flexDirection: 'row',
     marginBottom: theme.spacing.m,
   },
   filterChip: {
-    paddingHorizontal: theme.spacing.m,
-    paddingVertical: theme.spacing.s,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
-    marginRight: theme.spacing.s,
+    marginRight: 10,
+    ...theme.shadow.soft,
   },
   filterText: {
     ...theme.typography.caption,
+    fontSize: 13,
+  },
+  sectionLabel: {
+    ...theme.typography.small,
+    fontSize: 10,
+    marginBottom: theme.spacing.s,
+    marginTop: theme.spacing.m,
   },
   yearGrid: {
-    gap: theme.spacing.m,
+    gap: 12,
   },
   yearCard: {
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.l,
-    ...theme.shadow,
-    elevation: 2,
-  },
-  yearCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.l,
+    padding: theme.spacing.l,
+    ...theme.shadow.soft,
+  },
+  yearCardLeft: {
+    flex: 1,
   },
   yearTitle: {
-    ...theme.typography.h1,
-    fontWeight: '800',
+    ...theme.typography.h2,
+    fontSize: 28,
   },
   yearCount: {
     ...theme.typography.body,
+    fontSize: 14,
     fontWeight: '600',
-    marginTop: theme.spacing.xs,
+    marginTop: 2,
+  },
+  yearIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  yearDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.l,
+    gap: 16,
+  },
+  backYearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+  },
+  backYearText: {
+    ...theme.typography.small,
+    fontSize: 11,
+  },
+  detailTitle: {
+    ...theme.typography.h2,
   },
   coverButton: {
-    paddingVertical: theme.spacing.s,
-    paddingHorizontal: theme.spacing.m,
+    paddingVertical: 12,
     alignItems: 'center',
-    alignSelf: 'center',
-    borderRadius: theme.borderRadius.round,
-    marginTop: theme.spacing.s,
-    marginBottom: theme.spacing.m,
+    borderRadius: theme.borderRadius.m,
+    marginTop: theme.spacing.m,
   },
   coverButtonText: {
     ...theme.typography.small,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    fontSize: 10,
   }
 });
