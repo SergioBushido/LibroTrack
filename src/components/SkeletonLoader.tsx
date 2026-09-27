@@ -17,7 +17,7 @@ export const SkeletonLoader: React.FC<Props> = ({
   style 
 }) => {
   const { colors } = useTheme();
-  const animatedValue = new Animated.Value(0);
+  const animatedValue = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(

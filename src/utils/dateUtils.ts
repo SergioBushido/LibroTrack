@@ -38,6 +38,7 @@ export const formatShortDate = (dateString: string): string => {
 };
 
 export const validateDates = (startDate: string, endDate: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
   const start = parseISO(startDate);
   const end = parseISO(endDate);
   if (!isValid(start) || !isValid(end)) return false;

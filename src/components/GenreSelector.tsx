@@ -25,7 +25,7 @@ export const GenreSelector: React.FC<Props> = ({ value, onChange }) => {
             key={genre}
             style={[
               styles.chip, 
-              { backgroundColor: isSelected ? colors.ink : colors.cardBg, borderColor: isSelected ? colors.ink : colors.border }
+              { backgroundColor: isSelected ? colors.accent : colors.cardBg, borderColor: isSelected ? colors.accent : colors.border }
             ]}
             onPress={() => onChange(isSelected ? null : genre)}
           >
@@ -50,6 +50,7 @@ const styles = StyleSheet.create({
     marginVertical: theme.spacing.s,
   },
   chip: {
+    maxWidth: '100%',
     paddingHorizontal: theme.spacing.m,
     paddingVertical: theme.spacing.s,
     borderRadius: theme.borderRadius.round,

@@ -1,11 +1,14 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import { useNotice } from '../context/NoticeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Animated, { FadeIn, FadeInDown, FadeOut, Layout } from 'react-native-reanimated';
 import { Book, Rating } from '../types/Book';
-import { getAllBooks, deleteBook, updateBook } from '../services/bookStorage';
+import { getAllBooks, deleteBook, updateBook, initializeBooksOnFirstRun } from '../services/bookStorage';
+import { createInitialLibrary } from '../services/initialLibrary';
 import { sortBooksByEndDate } from '../utils/filters';
 import { calculateStats } from '../services/statsService';
 import { theme, getGlobalStyles } from '../constants/theme';
@@ -36,14 +39,19 @@ export const BooksScreen = () => {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('Todos');
+  const filtersRef = useRef({ query, activeFilter });
+  filtersRef.current = { query, activeFilter };
+  const isLoadedRef = useRef(false);
   const [streak, setStreak] = useState(0);
   const [updatingCovers, setUpdatingCovers] = useState(false);
   const [lastBook, setLastBook] = useState<Book | null>(null);
   const [goal, setGoal] = useState(20);
-  
+
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const notice = useNotice();
   const { colors, isDark, toggleTheme } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
 
   const currentYear = new Date().getFullYear().toString();
   const nextYear = (new Date().getFullYear() + 1).toString();
@@ -54,7 +62,7 @@ export const BooksScreen = () => {
 
   const groupBooksByYear = (books: Book[]): BookSection[] => {
     const grouped: { [year: string]: Book[] } = {};
-    
+
     books.forEach(book => {
       const year = book.endDate.split('-')[0];
       if (!grouped[year]) {
@@ -64,7 +72,7 @@ export const BooksScreen = () => {
     });
 
     const sortedYears = Object.keys(grouped).sort((a, b) => parseInt(b) - parseInt(a));
-    
+
     return sortedYears.map(year => ({
       title: year,
       data: grouped[year].sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
@@ -73,31 +81,35 @@ export const BooksScreen = () => {
 
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
-    const allBooks = await getAllBooks();
-    const sortedBooks = sortBooksByEndDate(allBooks, false);
-    setBooks(sortedBooks);
-    
-    const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
-    const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
-    setGoal(currentGoal);
+    try {
+      await initializeBooksOnFirstRun(createInitialLibrary());
+      const allBooks = await getAllBooks();
+      const sortedBooks = sortBooksByEndDate(allBooks, false);
+      setBooks(sortedBooks);
 
-    const stats = calculateStats(allBooks, currentGoal);
-    setStreak(stats.readingStreak);
-    
-    if (sortedBooks.length > 0) {
-      setLastBook(sortedBooks[0]);
-    }
+      const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
+      const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
+      setGoal(currentGoal);
 
-    applyFilters(sortedBooks, query, activeFilter);
-    if (!silent) {
-      setTimeout(() => setLoading(false), 500); // Artificial delay for smoother transition
+      const stats = calculateStats(allBooks, currentGoal);
+      setStreak(stats.readingStreak);
+
+      setLastBook(sortedBooks[0] ?? null);
+
+      applyFilters(sortedBooks, filtersRef.current.query, filtersRef.current.activeFilter);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Error de lectura desconocido';
+      notice.alert('No se puede abrir la biblioteca', `Tus libros guardados no se han modificado. Vuelve a entrar en Biblioteca para intentarlo de nuevo.\n\nDetalle del error: ${detail}`, [{ text: 'Entendido' }], { variant: 'error' });
+    } finally {
+      setLoading(false);
+      isLoadedRef.current = true;
     }
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadData(books.length > 0);
-    }, [books.length])
+      loadData(isLoadedRef.current);
+    }, [])
   );
 
   const applyFilters = (sourceBooks: Book[], searchQuery: string, filter: FilterType) => {
@@ -105,7 +117,7 @@ export const BooksScreen = () => {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter(book => 
+      result = result.filter(book =>
         book.title.toLowerCase().includes(q) ||
         (book.author && book.author.toLowerCase().includes(q)) ||
         (book.notes && book.notes.toLowerCase().includes(q))
@@ -137,18 +149,22 @@ export const BooksScreen = () => {
 
   const handleDelete = (id: string) => {
     HapticService.error();
-    Alert.alert(
+    notice.alert(
       "Eliminar libro",
-      "¿Estás seguro de que quieres eliminar este libro de tu biblioteca?",
+      "El libro y sus notas se eliminarán de tu biblioteca. Esta acción no se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Eliminar", 
+        {
+          text: "Eliminar",
           style: "destructive",
           onPress: async () => {
-            await deleteBook(id);
-            HapticService.success();
-            loadData(true);
+            try {
+              await deleteBook(id);
+              HapticService.success();
+              await loadData(true);
+            } catch {
+              notice.alert('No se ha eliminado el libro', 'Vuelve a intentarlo desde la biblioteca.', [{ text: 'Entendido' }], { variant: 'error' });
+            }
           }
         }
       ]
@@ -173,12 +189,17 @@ export const BooksScreen = () => {
 
       await loadData(true);
       HapticService.success();
-      Alert.alert(
-        'Portadas actualizadas',
-        `Se han encontrado ${updatedCount} nuevas portadas de ${missingCoverBooks.length} libros sin imágenes.`
+      notice.alert(
+        missingCoverBooks.length === 0 ? 'Todas las portadas están completas' : updatedCount === 0 ? 'No se han encontrado portadas' : 'Portadas actualizadas',
+        missingCoverBooks.length === 0
+          ? 'Todos tus libros ya tienen una portada.'
+          : updatedCount === 0
+            ? 'No se ha añadido ninguna portada. Puedes volver a buscar más tarde o revisar el título y el autor de cada libro.'
+            : `Se ${updatedCount === 1 ? 'ha añadido 1 portada' : `han añadido ${updatedCount} portadas`}.`,
+        [{ text: 'Entendido' }]
       );
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron actualizar las portadas.');
+      notice.alert('Actualización de portadas interrumpida', 'Las portadas que ya se hayan guardado se conservan. Vuelve a intentarlo para buscar las que faltan.', [{ text: 'Entendido' }], { variant: 'error' });
     } finally {
       setUpdatingCovers(false);
     }
@@ -191,33 +212,33 @@ export const BooksScreen = () => {
           <Text style={[styles.welcomeText, { color: colors.ink3 }]}>Mis lecturas</Text>
           <View style={styles.titleWithBadge}>
             <Text style={[styles.title, { color: colors.ink }]}>LibroTrack</Text>
-            <View style={[styles.totalBadge, { backgroundColor: colors.accent + '20' }]}>
+            <View style={[styles.totalBadge, { backgroundColor: colors.accentSoft }]}>
               <Text style={[styles.totalBadgeText, { color: colors.accent }]}>{books.length}</Text>
             </View>
           </View>
         </View>
-        <TouchableOpacity 
-          onPress={() => { HapticService.light(); toggleTheme(); }} 
+        <TouchableOpacity
+          onPress={() => { HapticService.light(); toggleTheme(); }}
           style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
         >
           <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={22} color={colors.ink} />
         </TouchableOpacity>
       </View>
-      
+
       {!selectedYear && lastBook && query === '' && activeFilter === 'Todos' && (
         <FadeInView delay={200}>
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={0.9}
-            style={[styles.heroCard, { backgroundColor: colors.ink }]}
+            style={[styles.heroCard, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]}
             onPress={() => { HapticService.light(); navigation.navigate('BookDetail', { id: lastBook.id, book: lastBook }); }}
           >
-            <View style={styles.heroContent}>
-              <View style={styles.heroInfo}>
+            <View style={[styles.heroContent, layout.compact && { flexDirection: 'column', alignItems: 'stretch', gap: 16 }]}>
+              <View style={[styles.heroInfo, layout.compact && { flex: undefined, paddingRight: 0 }]}>
                 <View style={styles.heroBadge}>
                   <Text style={styles.heroBadgeText}>ÚLTIMA LECTURA</Text>
                 </View>
-                <Text style={[styles.heroTitle, { color: colors.cream }]} numberOfLines={2}>{lastBook.title}</Text>
-                <Text style={[styles.heroAuthor, { color: 'rgba(247,244,239,0.7)' }]}>{lastBook.author}</Text>
+                <Text style={[styles.heroTitle, { color: '#FFF' }]} numberOfLines={2}>{lastBook.title}</Text>
+                <Text style={[styles.heroAuthor, { color: 'rgba(255,255,255,0.75)' }]}>{lastBook.author}</Text>
                 <View style={styles.heroFooter}>
                    <RatingBadge rating={lastBook.rating} mini />
                    <View style={styles.heroDots}>
@@ -232,7 +253,7 @@ export const BooksScreen = () => {
                   <Image source={{ uri: lastBook.coverUrl }} style={styles.heroCover} resizeMode="cover" />
                 ) : (
                   <View style={[styles.heroCover, { backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }]}>
-                    <MaterialCommunityIcons name="book-open-variant" size={30} color={colors.cream} />
+                    <MaterialCommunityIcons name="book-open-variant" size={30} color={'#FFF'} />
                   </View>
                 )}
               </View>
@@ -243,23 +264,23 @@ export const BooksScreen = () => {
 
       {!selectedYear && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsBar}>
-          <QuickStat 
-            label="Racha" 
-            value={`${streak} ${streak === 1 ? 'libro' : 'libros'}`} 
-            icon="fire" 
-            color="#FF8A65" 
+          <QuickStat
+            label="Este mes"
+            value={`${streak} ${streak === 1 ? 'libro' : 'libros'}`}
+            icon="fire"
+            color={colors.accent2}
           />
-          <QuickStat 
-            label={`Meta ${currentYear}`} 
-            value={`${books.filter(b => b.endDate.startsWith(currentYear)).length}/${goal}`} 
-            icon="trophy-outline" 
-            color={colors.gold} 
+          <QuickStat
+            label={`Meta ${currentYear}`}
+            value={`${books.filter(b => b.endDate.startsWith(currentYear)).length}/${goal}`}
+            icon="trophy-outline"
+            color={colors.gold}
           />
-          <QuickStat 
-            label="Total" 
-            value={books.length} 
-            icon="library-shelves" 
-            color={colors.blue} 
+          <QuickStat
+            label="Total"
+            value={books.length}
+            icon="library-shelves"
+            color={colors.accent}
           />
         </ScrollView>
       )}
@@ -288,16 +309,16 @@ export const BooksScreen = () => {
               key={filter}
               activeOpacity={0.7}
               style={[
-                styles.filterChip, 
-                { 
-                  backgroundColor: isActive ? colors.ink : colors.cardBg, 
-                  borderColor: isActive ? colors.ink : colors.border 
+                styles.filterChip,
+                {
+                backgroundColor: isActive ? colors.accent : colors.cardBg,
+                  borderColor: isActive ? colors.accent : colors.border
                 }
               ]}
               onPress={() => handleFilterPress(filter)}
             >
               <Text style={[
-                styles.filterText, 
+                styles.filterText,
                 { color: isActive ? colors.cream : colors.ink2, fontWeight: isActive ? '700' : '500' }
               ]}>
                 {filter}
@@ -312,11 +333,11 @@ export const BooksScreen = () => {
   if (loading) {
     return (
       <View style={globalStyles.container}>
-        <ScrollView contentContainerStyle={styles.listContent}>
+        <ScrollView contentContainerStyle={[styles.listContent, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <View style={styles.header}>
             <SkeletonLoader width={150} height={40} style={{ marginBottom: 20 }} />
             <SkeletonLoader width="100%" height={160} borderRadius={20} style={{ marginBottom: 20 }} />
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
               <SkeletonLoader width={100} height={50} borderRadius={10} />
               <SkeletonLoader width={100} height={50} borderRadius={10} />
               <SkeletonLoader width={100} height={50} borderRadius={10} />
@@ -343,8 +364,8 @@ export const BooksScreen = () => {
 
   return (
     <View style={globalStyles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.listContent}
+      <ScrollView
+        contentContainerStyle={[styles.listContent, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {renderHeader()}
@@ -352,13 +373,13 @@ export const BooksScreen = () => {
         {selectedYear ? (
           <FadeInView delay={0}>
             <View style={styles.yearDetailHeader}>
-              <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}> 
+              <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                 <MaterialCommunityIcons name="arrow-left" size={20} color={colors.ink} />
                 <Text style={[styles.backYearText, { color: colors.ink }]}>Volver</Text>
               </TouchableOpacity>
               <Text style={[styles.detailTitle, { color: colors.ink }]}>{selectedYear}</Text>
             </View>
-            
+
             {selectedSection && selectedSection.data.length > 0 ? (
               selectedSection.data.map((book, index) => (
                 <BookCard
@@ -394,21 +415,21 @@ export const BooksScreen = () => {
                       {section.data.length} {section.data.length === 1 ? 'libro' : 'libros'}
                     </Text>
                   </View>
-                  <View style={[styles.yearIcon, { backgroundColor: colors.cream }]}>
-                    <MaterialCommunityIcons name="chevron-right" size={24} color={colors.ink} />
+                  <View style={[styles.yearIcon, { backgroundColor: colors.accentSoft }]}
+                    ><MaterialCommunityIcons name="chevron-right" size={24} color={colors.accent} />
                   </View>
                 </TouchableOpacity>
               </FadeInView>
             ))}
-            
+
             <TouchableOpacity
               style={[styles.coverButton, { borderColor: colors.border, borderWidth: 1 }]}
               onPress={handleFetchMissingCovers}
               disabled={updatingCovers}
             >
-              <Text style={[styles.coverButtonText, { color: colors.ink3 }]}> 
-                <MaterialCommunityIcons name="image-sync" size={14} /> 
-                {updatingCovers ? ' ACTUALIZANDO...' : ' SINCRONIZAR PORTADAS'} 
+              <Text style={[styles.coverButtonText, { color: colors.ink3 }]}>
+                <MaterialCommunityIcons name="image-sync" size={14} />
+                {updatingCovers ? ' ACTUALIZANDO...' : ' SINCRONIZAR PORTADAS'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -427,6 +448,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.m,
   },
   titleRow: {
+    flexWrap: 'wrap',
+    gap: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -449,6 +472,7 @@ const styles = StyleSheet.create({
     ...theme.shadow.soft,
   },
   titleWithBadge: {
+    flexWrap: 'wrap',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -504,6 +528,8 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   heroFooter: {
+    flexWrap: 'wrap',
+    gap: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -538,7 +564,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: theme.borderRadius.m,
     paddingHorizontal: theme.spacing.m,
-    height: 52,
+    minHeight: 52,
+    paddingVertical: 8,
     borderWidth: 1,
     marginBottom: theme.spacing.m,
     ...theme.shadow.soft,

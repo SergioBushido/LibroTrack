@@ -1,18 +1,20 @@
-import React from 'react';
-import { View, Dimensions, StyleSheet, Text } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Text } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Rating } from '../types/Book';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 interface Props {
   data: Record<Rating, number>;
 }
 
-const screenWidth = Dimensions.get('window').width;
-
 export const DonutChart: React.FC<Props> = ({ data }) => {
+  const [width, setWidth] = useState(0);
+  const chartSize = Math.min(width, 220);
   const { colors, isDark } = useTheme();
+  const { compact } = useResponsiveLayout();
 
   const getRatingColor = (rating: Rating) => {
     const config = theme.ratingColors[rating];
@@ -36,24 +38,24 @@ export const DonutChart: React.FC<Props> = ({ data }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      <View style={styles.chartWrapper}>
-        <PieChart
+      <View style={styles.chartWrapper} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+        {chartSize > 0 && <PieChart
           data={chartData.map(item => ({ ...item, legendFontColor: 'transparent', legendFontSize: 0 }))}
-          width={screenWidth * 0.5}
-          height={160}
+          width={chartSize}
+          height={chartSize}
           chartConfig={chartConfig}
           accessor={"count"}
           backgroundColor={"transparent"}
-          paddingLeft={"40"}
+          paddingLeft={String(chartSize / 4)}
           center={[0, 0]}
           hasLegend={false}
           absolute
-        />
-        <View style={styles.centerLabel}>
-          <Text style={[styles.centerTotal, { color: colors.ink }]}>{total}</Text>
-          <Text style={[styles.centerSub, { color: colors.ink3 }]}>libros</Text>
+        />}
+        <View style={[styles.centerLabel, { backgroundColor: colors.cardBg, width: chartSize * 0.5, height: chartSize * 0.5, borderRadius: chartSize }]}>
+          {!compact && total < 10000 && <Text style={[styles.centerTotal, { color: colors.ink }]}>{total}</Text>}
         </View>
       </View>
+      {(compact || total >= 10000) && <Text style={[styles.centerTotal, { color: colors.ink }]}>{total} libros</Text>}
 
       <View style={styles.legendContainer}>
         {chartData.map((item) => {
@@ -96,6 +98,7 @@ const styles = StyleSheet.create({
     ...theme.typography.h2,
     fontWeight: '800',
     lineHeight: 28,
+    textAlign: 'center',
   },
   centerSub: {
     ...theme.typography.small,
@@ -109,12 +112,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing.m,
     paddingTop: theme.spacing.m,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopColor: 'rgba(128,128,128,0.1)',
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '45%',
+    flexBasis: 150,
+    flexGrow: 1,
+    flexShrink: 1,
     gap: theme.spacing.s,
   },
   dot: {

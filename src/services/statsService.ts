@@ -81,11 +81,11 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
     const days = calculateReadingDays(book.startDate, book.endDate);
     totalDays += days;
 
-    if (days < fastestDays) {
+    if ((targetYear === 0 || endYear === displayYear) && days > 0 && days < fastestDays) {
       fastestDays = days;
       stats.fastestBook = book;
     }
-    if (days > slowestDays) {
+    if ((targetYear === 0 || endYear === displayYear) && days > 0 && days > slowestDays) {
       slowestDays = days;
       stats.slowestBook = book;
     }

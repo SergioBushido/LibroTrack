@@ -16,7 +16,7 @@ export const QuickStat = ({ label, value, icon, color }: QuickStatProps) => {
   
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      <View style={[styles.iconContainer, { backgroundColor: color || colors.accent + '20' }]}>
+      <View style={[styles.iconContainer, { backgroundColor: (color || colors.accent) + '18' }]}>
         <MaterialCommunityIcons name={icon} size={18} color={color || colors.accent} />
       </View>
       <View>

@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import { useNotice } from '../context/NoticeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Book, Genre, Mood, Rating } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { DateField } from '../components/DateField';
 import { GenreSelector } from '../components/GenreSelector';
 import { MoodSelector } from '../components/MoodSelector';
 import { updateBook } from '../services/bookStorage';
@@ -18,9 +21,13 @@ export const EditBookScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const book: Book = route.params?.book;
+  const notice = useNotice();
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
 
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState(book?.title || '');
   const [author, setAuthor] = useState(book?.author || '');
   const [genre, setGenre] = useState<Genre | null>(book?.genre || null);
@@ -41,7 +48,7 @@ export const EditBookScreen = () => {
     if (!startDate) newErrors.startDate = 'La fecha de inicio es obligatoria';
     if (!endDate) newErrors.endDate = 'La fecha de fin es obligatoria';
     if (startDate && endDate && !validateDates(startDate, endDate)) {
-      newErrors.endDate = 'La fecha de fin debe ser posterior a la de inicio';
+      newErrors.endDate = 'La fecha de fin debe ser igual o posterior a la de inicio';
     }
     if (!rating) newErrors.rating = 'Selecciona una valoración';
 
@@ -51,7 +58,7 @@ export const EditBookScreen = () => {
 
   const handleFetchPreview = async (silent = false) => {
     if (!title.trim()) {
-      if (!silent) Alert.alert('Aviso', 'Introduce al menos el título para buscar una portada');
+      if (!silent) notice.alert('Falta el título', 'Escribe el título del libro para buscar su portada.', [{ text: 'Entendido' }]);
       return;
     }
     setIsFetchingCover(true);
@@ -80,11 +87,14 @@ export const EditBookScreen = () => {
   }, [title, author]);
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!validate()) {
-      Alert.alert('Revisa los datos', 'Hay errores en el formulario');
+      notice.alert('Revisa los campos marcados', 'Completa el título, las fechas y la valoración. La fecha de fin debe ser igual o posterior a la de inicio.', [{ text: 'Revisar' }]);
       return;
     }
 
+    savingRef.current = true;
+    setSaving(true);
     try {
       await updateBook(book.id, {
         title: title.trim(),
@@ -98,38 +108,41 @@ export const EditBookScreen = () => {
         quote: quote.trim(),
         coverUrl: coverUrl || undefined,
       });
-      
-      Alert.alert('¡Actualizado!', 'El libro ha sido modificado', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+
+      navigation.goBack();
+      notice.success(`Cambios guardados en «${title.trim()}»`);
     } catch (e) {
-      Alert.alert('Error', 'No se pudo actualizar el libro');
+      const detail = e instanceof Error ? `\n\nDetalle del error: ${e.message}` : '';
+      notice.alert('No se han guardado los cambios', `Tus cambios siguen en el formulario. Puedes volver a intentarlo.${detail}`, [{ text: 'Entendido' }], { variant: 'error' });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
   if (!book) return null;
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
       </TouchableOpacity>
-      
+
       <Text style={[styles.screenTitle, { color: colors.ink }]}>Editar libro</Text>
 
       <View style={styles.coverPreviewContainer}>
         {coverUrl && !imageError ? (
-          <Image 
-            source={{ uri: coverUrl }} 
-            style={styles.coverPreview} 
-            resizeMode="contain" 
+          <Image
+            source={{ uri: coverUrl }}
+            style={styles.coverPreview}
+            resizeMode="contain"
             onError={() => setImageError(true)}
           />
         ) : (
           <BookPlaceholder title={title || book.title} author={author || book.author} height={150} />
         )}
-        <TouchableOpacity 
-          style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]} 
+        <TouchableOpacity
+          style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]}
           onPress={() => handleFetchPreview(false)}
           disabled={isFetchingCover}
         >
@@ -143,20 +156,20 @@ export const EditBookScreen = () => {
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
-        <TextInput 
-          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.title && { borderColor: colors.error }]} 
-          value={title} 
-          onChangeText={setTitle} 
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.title && { borderColor: colors.error }]}
+          value={title}
+          onChangeText={setTitle}
         />
         {errors.title && <Text style={[styles.errorText, { color: colors.error }]}>{errors.title}</Text>}
       </View>
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Autor</Text>
-        <TextInput 
-          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
-          value={author} 
-          onChangeText={setAuthor} 
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
+          value={author}
+          onChangeText={setAuthor}
         />
       </View>
 
@@ -165,25 +178,21 @@ export const EditBookScreen = () => {
         <GenreSelector value={genre} onChange={setGenre} />
       </View>
 
-      <View style={styles.row}>
-        <View style={[styles.field, { flex: 1, marginRight: theme.spacing.s }]}>
-          <Text style={[styles.label, { color: colors.ink }]}>Fecha inicio *</Text>
-          <TextInput 
-            style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.startDate && { borderColor: colors.error }]} 
-            value={startDate} 
-            onChangeText={setStartDate} 
-          />
-          {errors.startDate && <Text style={[styles.errorText, { color: colors.error }]}>{errors.startDate}</Text>}
+      <View style={layout.rowStyle}>
+        <View style={[styles.field, layout.columnStyle]}>
+          <DateField label="Fecha inicio *" value={startDate} maxDate={endDate || undefined} disabled={saving}
+            error={errors.startDate} onChange={date => {
+              setStartDate(date);
+              setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
+            }} />
         </View>
 
-        <View style={[styles.field, { flex: 1, marginLeft: theme.spacing.s }]}>
-          <Text style={[styles.label, { color: colors.ink }]}>Fecha fin *</Text>
-          <TextInput 
-            style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.endDate && { borderColor: colors.error }]} 
-            value={endDate} 
-            onChangeText={setEndDate} 
-          />
-          {errors.endDate && <Text style={[styles.errorText, { color: colors.error }]}>{errors.endDate}</Text>}
+        <View style={[styles.field, layout.columnStyle]}>
+          <DateField label="Fecha fin *" value={endDate} minDate={startDate || undefined} disabled={saving}
+            error={errors.endDate} onChange={date => {
+              setEndDate(date);
+              setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
+            }} />
         </View>
       </View>
 
@@ -197,10 +206,11 @@ export const EditBookScreen = () => {
             const textColor = isDark ? config.darkText : config.text;
 
             return (
-              <TouchableOpacity 
-                key={r} 
+              <TouchableOpacity
+                key={r}
                 style={[
-                  styles.ratingBtn, 
+                  styles.ratingBtn,
+                  layout.compact && { width: '100%' },
                   { backgroundColor: isSelected ? bg : colors.cardBg, borderColor: isSelected ? textColor : colors.border }
                 ]}
                 onPress={() => setRating(r)}
@@ -220,27 +230,27 @@ export const EditBookScreen = () => {
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Notas personales</Text>
-        <TextInput 
-          style={[styles.input, styles.textArea, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
-          value={notes} 
-          onChangeText={setNotes} 
-          multiline 
+        <TextInput
+          style={[styles.input, styles.textArea, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
           numberOfLines={4}
         />
       </View>
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Cita favorita</Text>
-        <TextInput 
-          style={[styles.input, styles.textArea, { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]} 
-          value={quote} 
-          onChangeText={setQuote} 
-          multiline 
+        <TextInput
+          style={[styles.input, styles.textArea, { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
+          value={quote}
+          onChangeText={setQuote}
+          multiline
         />
       </View>
 
-      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.ink }]} onPress={handleSave}>
-        <Text style={[styles.saveBtnText, { color: colors.cream }]}>Guardar cambios</Text>
+      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} disabled={saving} onPress={handleSave}>
+        <Text style={[styles.saveBtnText, { color: '#FFF' }]}>Guardar cambios</Text>
       </TouchableOpacity>
     </ScrollView>
   );

@@ -4,7 +4,7 @@
     "slug": "LibroTrack",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/librotrack-icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -16,15 +16,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/librotrack-adaptive.png",
+        "monochromeImage": "./assets/librotrack-monochrome.png",
+        "backgroundColor": "#8B3A3A"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.sferji.LibroTrack"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/librotrack-favicon.png"
     },
     "plugins": [
       "expo-font"

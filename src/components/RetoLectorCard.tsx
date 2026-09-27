@@ -7,6 +7,7 @@ import { FadeInView } from './FadeInView';
 import { HapticService } from '../services/HapticService';
 
 interface Props {
+  year?: number;
   current: number;
   goal: number;
   percentage: number;
@@ -14,8 +15,8 @@ interface Props {
   onEditGoal: () => void;
 }
 
-export const RetoLectorCard: React.FC<Props> = ({ current, goal, percentage, predictionText, onEditGoal }) => {
-  const { colors } = useTheme();
+export const RetoLectorCard: React.FC<Props> = ({ year = new Date().getFullYear(), current, goal, percentage, predictionText, onEditGoal }) => {
+  const { colors, isDark } = useTheme();
   const animatedProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -32,16 +33,16 @@ export const RetoLectorCard: React.FC<Props> = ({ current, goal, percentage, pre
     outputRange: ['0%', '100%'],
   });
 
-  const bg = colors.ink;
-  const textClaro = colors.cream;
-  const progressBg = 'rgba(255,255,255,0.1)';
+  const bg = isDark ? colors.surfaceElevated : colors.ink;
+  const textClaro = isDark ? colors.ink : colors.cream;
+  const progressBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.1)';
 
   return (
     <FadeInView delay={0} style={[styles.container, { backgroundColor: bg }, theme.shadow.medium]}>
       <View style={styles.header}>
         <View style={styles.titleGroup}>
           <MaterialCommunityIcons name="trophy-outline" size={18} color={colors.gold} />
-          <Text style={[styles.title, { color: textClaro }]}>Reto Lector {new Date().getFullYear()}</Text>
+          <Text style={[styles.title, { color: textClaro }]}>Reto Lector {year}</Text>
         </View>
         <TouchableOpacity onPress={() => { HapticService.light(); onEditGoal(); }} style={styles.editBtn}>
           <MaterialCommunityIcons name="pencil" size={16} color={textClaro} />
@@ -96,18 +97,21 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.l,
   },
   titleGroup: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   title: {
+    flexShrink: 1,
     ...theme.typography.small,
     letterSpacing: 1,
     fontSize: 11,
   },
   editBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
@@ -118,6 +122,8 @@ const styles = StyleSheet.create({
   },
   numbersRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     alignItems: 'baseline',
   },
   currentText: {
@@ -153,6 +159,8 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
   },
   statsText: {

@@ -15,7 +15,7 @@ export const BookPlaceholder: React.FC<Props> = ({ title, author, height = 180 }
 
   return (
     <View style={[styles.container, { height, backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      <View style={[styles.stripe, { backgroundColor: colors.accent2 + '20' }]} />
+      <View style={[styles.stripe, { backgroundColor: colors.accentSoft }]} />
       <MaterialCommunityIcons name="book-open-variant" size={40} color={colors.ink3} style={styles.icon} />
       <View style={styles.textContainer}>
         <Text style={[styles.title, { color: colors.ink }]} numberOfLines={2}>{title}</Text>

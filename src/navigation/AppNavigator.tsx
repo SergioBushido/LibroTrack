@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 
 import { BooksScreen } from '../screens/BooksScreen';
 import { BookDetailScreen } from '../screens/BookDetailScreen';
@@ -40,7 +40,7 @@ const CustomTabBarButton = ({ children, onPress }: any) => {
       style={styles.customAddBtn}
       onPress={onPress}
     >
-      <View style={[styles.customAddInner, { backgroundColor: colors.accent, shadowColor: colors.accent }]}>
+      <View style={[styles.customAddInner, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]}>
         {children}
       </View>
     </TouchableOpacity>
@@ -49,18 +49,23 @@ const CustomTabBarButton = ({ children, onPress }: any) => {
 
 export const AppNavigator = () => {
   const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const tabInset = Math.max(20, (width - 640) / 2);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: [
           styles.tabBar, 
           { 
-            backgroundColor: colors.cardBg, 
-            borderColor: colors.border,
-            shadowColor: isDark ? '#000' : colors.ink 
+            left: tabInset,
+            right: tabInset,
+            backgroundColor: isDark ? colors.surfaceElevated : colors.cardBg,
+            borderColor: isDark ? colors.glassBorder : colors.border,
+            shadowColor: isDark ? colors.accent : colors.ink 
           }
         ],
         tabBarIcon: ({ focused, color, size }) => {
@@ -75,12 +80,12 @@ export const AppNavigator = () => {
           }
 
           if (route.name === 'Añadir') {
-            return <MaterialCommunityIcons name="plus" size={32} color={isDark ? '#121212' : '#FFF'} />;
+            return <MaterialCommunityIcons name="plus" size={32} color={'#FFF'} />;
           }
 
           return <MaterialCommunityIcons name={iconName} size={28} color={color} />;
         },
-        tabBarActiveTintColor: colors.ink,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.ink3,
       })}
     >

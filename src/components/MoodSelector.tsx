@@ -35,11 +35,17 @@ export const MoodSelector: React.FC<Props> = ({ value, onChange }) => {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
     justifyContent: 'space-between',
     marginVertical: theme.spacing.s,
   },
   moodBtn: {
-    padding: theme.spacing.m,
+    padding: theme.spacing.s,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
     borderColor: 'transparent',

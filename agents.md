@@ -6,7 +6,7 @@ Este documento proporciona contexto sobre la aplicación **LibroTrack** para que
 LibroTrack es una biblioteca personal de lectura diseñada para gestionar y visualizar el historial de libros leídos. Se enfoca en un diseño editorial premium y en proporcionar estadísticas detalladas sobre los hábitos de lectura.
 
 ## 🛠 Stack Tecnológico
-- **Core**: React Native con Expo SDK 51 (TypeScript).
+- **Core**: React Native 0.81 con Expo SDK 54 (TypeScript).
 - **Navegación**: React Navigation (Bottom Tabs + Stack Navigators).
 - **Persistencia**: AsyncStorage para almacenamiento local.
 - **Gráficos**: `react-native-chart-kit` y `react-native-svg`.
@@ -48,6 +48,6 @@ LibroTrack es una biblioteca personal de lectura diseñada para gestionar y visu
 La aplicación es funcional y cuenta con su arquitectura base sólida. Se han corregido problemas de dependencias y está conectada a un repositorio en GitHub (`SergioBushido/LibroTrack`).
 
 **Siguiente fase sugerida:**
-- Implementación de copias de seguridad en la nube o exportación a JSON/CSV.
+- Copias JSON locales implementadas; pendientes sincronización en la nube y exportación CSV.
 - Mejoras en el diseño de la pantalla de detalle (animaciones con Reanimated).
 - Sistema de notificaciones para recordar el reto lector.

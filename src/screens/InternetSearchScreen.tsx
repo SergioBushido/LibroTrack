@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +18,9 @@ export const InternetSearchScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
+
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -27,16 +31,28 @@ export const InternetSearchScreen = () => {
       }
     }, 800);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [query]);
 
   const handleLocalSearch = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setIsLoading(true);
     try {
-      const books = await searchBooksOnGoogle(query);
+      const books = await searchBooksOnGoogle(query, abortControllerRef.current.signal);
       setResults(books);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error(error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -45,7 +61,7 @@ export const InternetSearchScreen = () => {
   const handleExternalSearch = (engine: string) => {
     HapticService.light();
     if (!query.trim()) return;
-    
+
     const encodedQuery = encodeURIComponent(query.trim());
     let url = '';
 
@@ -63,10 +79,9 @@ export const InternetSearchScreen = () => {
 
   const handleAddToLibrary = (book: SearchResult) => {
     HapticService.success();
-    navigation.navigate('AddBook', {
-      title: book.title,
-      author: book.author,
-      coverUrl: book.coverUrl
+    navigation.navigate('Añadir', {
+      screen: 'AddBookForm',
+      params: { title: book.title, author: book.author, coverUrl: book.coverUrl }
     });
   };
 
@@ -80,11 +95,11 @@ export const InternetSearchScreen = () => {
   ];
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
       <FadeInView delay={0}>
         <Text style={[styles.screenTitle, { color: colors.ink }]}>Descubrir</Text>
       </FadeInView>
-      
+
       <FadeInView delay={100} style={[styles.searchContainer, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
         <MaterialCommunityIcons name="magnify" size={22} color={colors.ink3} />
         <TextInput
@@ -114,10 +129,10 @@ export const InternetSearchScreen = () => {
         <View style={styles.resultsSection}>
           <Text style={[styles.sectionTitle, { color: colors.ink }]}>Sugerencias</Text>
           {results.map((book, index) => (
-            <FadeInView 
-              key={book.id} 
+            <FadeInView
+              key={book.id}
               delay={200 + index * 100}
-              style={[styles.resultCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+              style={[styles.resultCard, layout.compact && { flexDirection: 'column', gap: 12 }, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
             >
               {book.coverUrl ? (
                 <Image source={{ uri: book.coverUrl }} style={styles.resultCover} resizeMode="cover" />
@@ -126,15 +141,15 @@ export const InternetSearchScreen = () => {
                   <MaterialCommunityIcons name="book-open-variant" size={24} color={colors.ink3} />
                 </View>
               )}
-              <View style={styles.resultInfo}>
-                <Text style={[styles.resultTitle, { color: colors.ink }]} numberOfLines={2}>{book.title}</Text>
-                <Text style={[styles.resultAuthor, { color: colors.ink3 }]} numberOfLines={1}>{book.author}</Text>
-                <TouchableOpacity 
-                  style={[styles.addBtn, { backgroundColor: colors.ink }]}
+              <View style={[styles.resultInfo, layout.compact && { marginLeft: 0, flex: undefined }]}>
+                <Text style={[styles.resultTitle, { color: colors.ink }]} numberOfLines={layout.compact ? undefined : 2}>{book.title}</Text>
+                <Text style={[styles.resultAuthor, { color: colors.ink3 }]} numberOfLines={layout.compact ? undefined : 1}>{book.author}</Text>
+                <TouchableOpacity
+                  style={[styles.addBtn, { backgroundColor: colors.accent }]}
                   onPress={() => handleAddToLibrary(book)}
                 >
-                  <MaterialCommunityIcons name="plus" size={16} color={colors.cream} />
-                  <Text style={[styles.addBtnText, { color: colors.cream }]}>Añadir</Text>
+                  <MaterialCommunityIcons name="plus" size={16} color={'#FFF'} />
+                  <Text style={[styles.addBtnText, { color: '#FFF' }]}>Añadir</Text>
                 </TouchableOpacity>
               </View>
             </FadeInView>
@@ -149,7 +164,8 @@ export const InternetSearchScreen = () => {
             <TouchableOpacity
               key={engine.id}
               style={[
-                styles.engineBtn, 
+                styles.engineBtn,
+                { width: layout.compact ? '100%' : (layout.contentWidth - 16) / 2 },
                 { backgroundColor: colors.cardBg, borderColor: colors.border },
                 !query.trim() && { opacity: 0.5 }
               ]}
@@ -182,7 +198,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing.m,
-    height: 60,
+    minHeight: 60,
+    paddingVertical: 8,
     borderWidth: 1,
     marginBottom: theme.spacing.xl,
     ...theme.shadow.soft,
@@ -257,7 +274,7 @@ const styles = StyleSheet.create({
   },
   engineBtn: {
     width: '47.5%',
-    height: 100,
+    minHeight: 100,
     borderWidth: 1,
     borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.m,

@@ -1,3 +1,4 @@
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,32 +13,38 @@ import { BarChart } from '../components/BarChart';
 import { DonutChart } from '../components/DonutChart';
 import { EmptyState } from '../components/EmptyState';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { getEndYear } from '../utils/dateUtils';
+import { TextEditModal } from '../components/TextEditModal';
+import { BackupActions } from '../components/BackupActions';
 import { FadeInView } from '../components/FadeInView';
 import { HapticService } from '../services/HapticService';
 
 const GOAL_KEY = 'lecturas_reto_goal';
 
 export const StatsScreen = () => {
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [goal, setGoal] = useState(20);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const { colors, isDark, toggleTheme } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
 
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
+      setLoadError(false);
       const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
       const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
       setGoal(currentGoal);
 
       const books = await getAllBooks();
-      const newStats = calculateStats(books, currentGoal, selectedYear === 0 ? new Date().getFullYear() : selectedYear);
+      const newStats = calculateStats(books, currentGoal, selectedYear);
       setStats(newStats);
     } catch (e) {
       console.error(e);
+      setLoadError(true);
     }
     if (!silent) setLoading(false);
   };
@@ -48,31 +55,16 @@ export const StatsScreen = () => {
     }, [selectedYear])
   );
 
-  const handleEditGoal = () => {
-    HapticService.light();
-    Alert.prompt(
-      "Reto lector",
-      "¿Cuántos libros quieres leer este año?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Guardar",
-          onPress: async (text: string | undefined) => {
-            if (text) {
-              const newGoal = parseInt(text, 10);
-              if (!isNaN(newGoal) && newGoal > 0) {
-                await AsyncStorage.setItem(GOAL_KEY, newGoal.toString());
-                HapticService.success();
-                loadData(true);
-              }
-            }
-          }
-        }
-      ],
-      'plain-text',
-      goal.toString(),
-      'numeric'
-    );
+  const handleEditGoal = () => setEditingGoal(true);
+
+  const saveGoal = async (text: string) => {
+    const value = Number(text.trim());
+    if (!/^\d+$/.test(text.trim()) || !Number.isSafeInteger(value) || value <= 0) {
+      throw new Error('Introduce un número entero mayor que cero');
+    }
+    await AsyncStorage.setItem(GOAL_KEY, String(value));
+    HapticService.success();
+    await loadData(true);
   };
 
   if (loading) {
@@ -83,21 +75,23 @@ export const StatsScreen = () => {
     );
   }
 
-  if (!stats || stats.totalBooks === 0) {
+  if (loadError || !stats || stats.totalBooks === 0) {
     return (
-      <View style={globalStyles.container}>
+      <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.headerRow}>
           <Text style={[styles.screenTitle, { color: colors.ink }]}>Estadísticas</Text>
           <TouchableOpacity onPress={toggleTheme} style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={24} color={colors.ink} />
           </TouchableOpacity>
         </View>
-        <EmptyState 
-          icon="chart-bar" 
-          title="Sin estadísticas" 
-          subtitle="Añade algunos libros a tu biblioteca para ver tus estadísticas de lectura." 
+        <EmptyState
+          icon="chart-bar"
+          title={loadError ? 'No se pudo cargar la biblioteca' : 'Sin estadísticas'}
+          subtitle={loadError ? 'Los datos no se han modificado. Puedes reintentar o restaurar una copia válida.' : 'Añade libros o importa una copia de seguridad.'}
         />
-      </View>
+        {loadError && <TouchableOpacity onPress={() => loadData()}><Text style={{ color: colors.accent }}>Reintentar</Text></TouchableOpacity>}
+        <BackupActions onRestored={() => loadData(true)} />
+      </ScrollView>
     );
   }
 
@@ -107,19 +101,19 @@ export const StatsScreen = () => {
 
   const predictionText = isTotal
     ? "Estadísticas acumuladas de toda tu biblioteca"
-    : (isCurrentYear 
+    : (isCurrentYear
         ? (retaProgress.willAchieve ? "✓ Vas a cumplir tu reto" : `→ A este ritmo llegarás a ~${retaProgress.projectedTotal} libros`)
         : (retaProgress.willAchieve ? "✓ Reto cumplido" : "✗ Reto no cumplido"));
 
   const availableYears = Object.keys(stats.booksByYear).map(Number).sort((a, b) => b - a);
-  const yearsOptions = [0, ...availableYears]; // 0 representa "Total"
+  const yearsOptions = [0, ...Array.from(new Set([new Date().getFullYear(), ...availableYears])).sort((a, b) => b - a)]; // 0 representa "Total"
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
       <FadeInView delay={0} style={styles.headerRow}>
         <Text style={[styles.screenTitle, { color: colors.ink }]}>Estadísticas</Text>
-        <TouchableOpacity 
-          onPress={() => { HapticService.light(); toggleTheme(); }} 
+        <TouchableOpacity
+          onPress={() => { HapticService.light(); toggleTheme(); }}
           style={[styles.themeBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
         >
           <MaterialCommunityIcons name={isDark ? "weather-sunny" : "weather-night"} size={22} color={colors.ink} />
@@ -132,11 +126,11 @@ export const StatsScreen = () => {
             const isActive = selectedYear === year;
             const label = year === 0 ? "Total" : year.toString();
             return (
-              <TouchableOpacity 
-                key={year} 
+              <TouchableOpacity
+                key={year}
                 style={[
-                  styles.yearChip, 
-                  { backgroundColor: isActive ? colors.ink : colors.cardBg, borderColor: isActive ? colors.ink : colors.border }
+                  styles.yearChip,
+                  { backgroundColor: isActive ? colors.accent : colors.cardBg, borderColor: isActive ? colors.accent : colors.border }
                 ]}
                 onPress={() => { HapticService.selection(); setSelectedYear(year); }}
               >
@@ -147,7 +141,10 @@ export const StatsScreen = () => {
         </ScrollView>
       </FadeInView>
 
-      <RetoLectorCard 
+      <BackupActions onRestored={() => loadData(true)} />
+      {editingGoal && <TextEditModal title="Reto lector" initialValue={String(goal)} numeric onClose={() => setEditingGoal(false)} onSave={saveGoal} />}
+      <RetoLectorCard
+        year={isTotal ? new Date().getFullYear() : selectedYear}
         current={retaProgress.current}
         goal={retaProgress.goal}
         percentage={retaProgress.percentage}
@@ -155,12 +152,12 @@ export const StatsScreen = () => {
         onEditGoal={handleEditGoal}
       />
 
-      <FadeInView delay={200} style={styles.grid2x2}>
+      <FadeInView delay={200} style={[styles.grid2x2, layout.rowStyle]}>
         <StatsCard title={isTotal ? "Total" : "Año"} value={isTotal ? stats.totalBooks : stats.booksThisYear} subtitle="libros" />
         <StatsCard title="Media" value={stats.avgDaysPerBook} subtitle="días/libro" />
       </FadeInView>
-      <FadeInView delay={300} style={styles.grid2x2}>
-        <StatsCard title="Racha" value={stats.readingStreak} subtitle="este mes" />
+      <FadeInView delay={300} style={[styles.grid2x2, layout.rowStyle]}>
+        <StatsCard title="Este mes" value={stats.readingStreak} subtitle="libros" />
         <StatsCard title="Estados" value={Object.keys(stats.booksByMood).length} subtitle="ánimos" />
       </FadeInView>
 
@@ -169,9 +166,9 @@ export const StatsScreen = () => {
           {isTotal ? "Lecturas por año" : `Lecturas mensuales en ${selectedYear}`}
         </Text>
         {isTotal ? (
-          <BarChart 
-            data={Object.values(stats.booksByYear)} 
-            labels={Object.keys(stats.booksByYear)} 
+          <BarChart
+            data={Object.values(stats.booksByYear)}
+            labels={Object.keys(stats.booksByYear)}
           />
         ) : (
           <BarChart data={stats.booksByMonth} />
@@ -199,9 +196,9 @@ export const StatsScreen = () => {
 
       {(stats.fastestBook || stats.slowestBook) && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Récords de {selectedYear}</Text>
-          
-          {stats.fastestBook && getEndYear(stats.fastestBook.endDate) === selectedYear && (
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>{isTotal ? 'Récords de toda la biblioteca' : `Récords de ${selectedYear}`}</Text>
+
+          {stats.fastestBook && (
             <FadeInView delay={700} style={[styles.recordCard, { backgroundColor: colors.green + '15', borderColor: colors.green + '30' }]}>
               <View style={[styles.recordIconBox, { backgroundColor: colors.green }]}>
                 <MaterialCommunityIcons name="flash" size={20} color={colors.cream} />
@@ -213,7 +210,7 @@ export const StatsScreen = () => {
             </FadeInView>
           )}
 
-          {stats.slowestBook && getEndYear(stats.slowestBook.endDate) === selectedYear && (
+          {stats.slowestBook && (
             <FadeInView delay={800} style={[styles.recordCard, { marginTop: theme.spacing.m, backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}>
               <View style={[styles.recordIconBox, { backgroundColor: colors.accent }]}>
                 <MaterialCommunityIcons name="tortoise" size={20} color={colors.cream} />
@@ -241,6 +238,8 @@ const styles = StyleSheet.create({
     paddingBottom: 120, // Espacio para el Tab Bar flotante
   },
   headerRow: {
+    flexWrap: 'wrap',
+    gap: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -328,5 +327,5 @@ const styles = StyleSheet.create({
   yearChipText: {
     ...theme.typography.body,
     fontWeight: '700',
-  }
+  },
 });

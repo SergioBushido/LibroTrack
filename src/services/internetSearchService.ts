@@ -6,12 +6,23 @@ export interface SearchResult {
   coverUrl?: string;
 }
 
-export const searchBooksOnGoogle = async (query: string): Promise<SearchResult[]> => {
+export const searchBooksOnGoogle = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
   if (!query.trim()) return [];
 
   try {
     const encodedQuery = encodeURIComponent(query.trim());
-    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=5&langRestrict=es`);
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel);
+    const timeout = setTimeout(cancel, 6000);
+
+    let response;
+    try {
+      response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=5&langRestrict=es`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', cancel);
+    }
     
     if (!response.ok) {
       throw new Error('Error al consultar la API de Google Books');

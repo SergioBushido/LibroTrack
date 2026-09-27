@@ -8,6 +8,7 @@ import { BookPlaceholder } from './BookPlaceholder';
 import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { HapticService } from '../services/HapticService';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 interface Props {
   book: Book;
@@ -20,6 +21,7 @@ interface Props {
 export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, index = 0 }) => {
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
   const days = calculateReadingDays(book.startDate, book.endDate);
   const [imageError, setImageError] = React.useState(false);
 
@@ -81,7 +83,7 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
         onPress={handlePress}
         style={[globalStyles.card, styles.container]}
       >
-        <View style={styles.contentRow}>
+        <View style={[styles.contentRow, layout.compact && { flexDirection: 'column', gap: 16 }]}>
           <View style={styles.imageContainer}>
             {book.coverUrl && !imageError ? (
               <Image 
@@ -93,20 +95,20 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
             ) : (
               <BookPlaceholder title={book.title} author={book.author} height={120} />
             )}
-            <View style={styles.moodBadge}>
+            <View style={[styles.moodBadge, { backgroundColor: colors.cardBg }]}>
               <Text style={styles.moodText}>{book.mood || '📖'}</Text>
             </View>
           </View>
 
-          <View style={styles.infoContainer}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: colors.ink }]} numberOfLines={2}>
+          <View style={[styles.infoContainer, layout.compact && { marginLeft: 0, flex: undefined }]}>
+            <View style={[styles.titleRow, layout.compact && { flexDirection: 'column' }]}>
+              <Text style={[styles.title, { color: colors.ink }, layout.compact && { flex: undefined }]} numberOfLines={layout.compact ? undefined : 2}>
                 {book.title}
               </Text>
               <RatingBadge rating={book.rating} mini />
             </View>
             
-            <Text style={[styles.author, { color: colors.ink2 }]} numberOfLines={1}>
+            <Text style={[styles.author, { color: colors.ink2 }]} numberOfLines={layout.compact ? undefined : 1}>
               {book.author || 'Autor desconocido'}
             </Text>
 
@@ -172,6 +174,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.m,
   },
   imageContainer: {
+    width: 85,
     position: 'relative',
   },
   coverImage: {
@@ -226,6 +229,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.m,
   },
   badge: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -234,6 +238,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   badgeText: {
+    flexShrink: 1,
     ...theme.typography.small,
     fontSize: 10,
   },
@@ -251,6 +256,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   footer: {
+    flexWrap: 'wrap',
+    gap: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -269,6 +276,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   actionBtn: {
-    padding: 4,
+    padding: 10,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   }
 });

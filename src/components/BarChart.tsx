@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Dimensions, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -9,9 +9,8 @@ interface Props {
   labels?: string[];
 }
 
-const screenWidth = Dimensions.get('window').width;
-
 export const BarChart: React.FC<Props> = ({ data, labels }) => {
+  const [width, setWidth] = useState(0);
   const { colors, isDark } = useTheme();
   const defaultLabels = ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
   
@@ -23,7 +22,7 @@ export const BarChart: React.FC<Props> = ({ data, labels }) => {
     datasets: [
       {
         data: hasData ? data : data.map(() => 0.1), // Truco para que no de error si está vacío
-        color: (opacity = 1) => isDark ? `rgba(229, 115, 115, ${opacity})` : `rgba(139, 58, 58, ${opacity})`,
+        color: (opacity = 1) => isDark ? `rgba(162, 155, 254, ${opacity})` : `rgba(108, 92, 231, ${opacity})`,
         strokeWidth: 3
       }
     ]
@@ -34,8 +33,8 @@ export const BarChart: React.FC<Props> = ({ data, labels }) => {
     backgroundGradientFrom: colors.cardBg,
     backgroundGradientTo: colors.cardBg,
     decimalPlaces: 0,
-    color: (opacity = 1) => isDark ? `rgba(229, 115, 115, ${opacity})` : `rgba(139, 58, 58, ${opacity})`,
-    labelColor: (opacity = 1) => isDark ? `rgba(224, 220, 214, ${opacity})` : `rgba(74, 69, 64, ${opacity})`,
+    color: (opacity = 1) => isDark ? `rgba(162, 155, 254, ${opacity})` : `rgba(108, 92, 231, ${opacity})`,
+    labelColor: (opacity = 1) => isDark ? `rgba(176, 168, 192, ${opacity})` : `rgba(74, 67, 88, ${opacity})`,
     style: {
       borderRadius: 16,
     },
@@ -54,19 +53,21 @@ export const BarChart: React.FC<Props> = ({ data, labels }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      <LineChart
-        data={chartData}
-        width={screenWidth - theme.spacing.l * 2}
-        height={220}
-        chartConfig={chartConfig}
-        bezier
-        style={styles.chart}
-        withDots={hasData}
-        withInnerLines={true}
-        withOuterLines={false}
-        withVerticalLines={false}
-        fromZero={true}
-      />
+      <View style={{ width: '100%' }} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+        {width > 0 && <LineChart
+          data={chartData}
+          width={width}
+          height={220}
+          chartConfig={chartConfig}
+          bezier
+          style={styles.chart}
+          withDots={hasData}
+          withInnerLines={true}
+          withOuterLines={false}
+          withVerticalLines={false}
+          fromZero={true}
+        />}
+      </View>
     </View>
   );
 };
@@ -78,13 +79,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     paddingVertical: theme.spacing.m,
-    paddingRight: theme.spacing.m,
     overflow: 'hidden',
     ...theme.shadow,
     elevation: 3,
   },
   chart: {
     borderRadius: theme.borderRadius.xl,
-    marginLeft: -10, // Ajuste para centrar mejor
   }
 });

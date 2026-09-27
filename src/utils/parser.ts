@@ -17,21 +17,23 @@ export const parseNotes = (text: string): ParsedBook[] => {
   let currentMonth: number | null = null;
   let currentYear: number = new Date().getFullYear();
 
-  lines.forEach(line => {
+  lines.forEach((line, index) => {
     const trimmedLine = line.trim();
     if (!trimmedLine) return;
 
     // Check if line is a year (4 digits)
-    const yearMatch = trimmedLine.match(/^\d{4}$/);
-    if (yearMatch) {
-      currentYear = parseInt(yearMatch[0]);
+    const yearMatch = trimmedLine.match(/^(?:año\s+)?(\d{4}):?$/i);
+    const nextLine = lines.slice(index + 1).find(next => next.trim())?.trim().toLowerCase().replace(/:$/, '');
+    // Un año suelto solo es encabezado si le sigue un mes; «1984» también es un título.
+    if (yearMatch && (!currentMonth || /^año\s/i.test(trimmedLine) || (nextLine && MONTHS[nextLine]))) {
+      currentYear = parseInt(yearMatch[1], 10);
       currentMonth = null; // Reset month when year changes
       return;
     }
 
     // Check if line is a month
-    const lowerLine = trimmedLine.toLowerCase();
-    const foundMonth = Object.keys(MONTHS).find(m => lowerLine.includes(m));
+    const lowerLine = trimmedLine.toLowerCase().replace(/:$/, '');
+    const foundMonth = Object.keys(MONTHS).find(m => lowerLine === m);
     
     if (foundMonth && trimmedLine.length < 15) { // Simple heuristic: month headers are short
       currentMonth = MONTHS[foundMonth];
@@ -41,7 +43,7 @@ export const parseNotes = (text: string): ParsedBook[] => {
     // If we have a month, try to extract book titles
     if (currentMonth) {
       // Remove common list prefixes: -, *, 1., 1)
-      let title = trimmedLine.replace(/^[-*•\d.)]+\s*/, '').trim();
+      let title = trimmedLine.replace(/^(?:[-*•]\s*|\d+[.)]\s+)/, '').trim();
       
       if (title && title.length > 2) {
         results.push({

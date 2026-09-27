@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { useNotice } from '../context/NoticeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -10,43 +12,56 @@ import { saveBook } from '../services/bookStorage';
 import { fetchBookCoverUrl } from '../services/bookCoverService';
 
 export const ImportBooksScreen = () => {
+  const importingRef = useRef(false);
+  const [importing, setImporting] = useState(false);
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<ParsedBook[]>([]);
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const notice = useNotice();
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
 
   const handleAnalyze = () => {
     if (!text.trim()) {
-      Alert.alert('Error', 'Por favor, pega algún texto para analizar.');
+      notice.alert('Añade tu lista de libros', 'Pega tus notas en el cuadro de texto y pulsa «Analizar texto».', [{ text: 'Entendido' }]);
       return;
     }
     const results = parseNotes(text);
     setPreview(results);
     if (results.length === 0) {
-      Alert.alert('Aviso', 'No se detectaron libros. Asegúrate de incluir el año y el nombre del mes antes de la lista de libros.');
+      notice.alert('No se han encontrado libros', 'Escribe el año y el mes antes de los títulos, con cada elemento en una línea. Por ejemplo:\n\n2026\nEnero\n- El Quijote', [{ text: 'Revisar texto' }]);
     }
   };
 
   const handleImport = async () => {
-    if (preview.length === 0) return;
+    if (importingRef.current || preview.length === 0) return;
+    importingRef.current = true;
+    setImporting(true);
+    let importedCount = 0;
 
     try {
       for (const item of preview) {
         const bookData = convertToBook(item);
         const coverUrl = await fetchBookCoverUrl(item.title, '');
         await saveBook({ ...bookData, coverUrl: coverUrl ?? undefined });
+        importedCount++;
       }
-      Alert.alert('Éxito', `Se han importado ${preview.length} libros correctamente.`, [
-        { text: 'OK', onPress: () => navigation.navigate('Biblioteca', { screen: 'BooksList' }) }
-      ]);
+      setPreview([]);
+      setText('');
+      navigation.navigate('Biblioteca', { screen: 'BooksList' });
+      notice.success(`Se ${preview.length === 1 ? 'ha añadido 1 libro' : `han añadido ${preview.length} libros`} a tu biblioteca`);
     } catch (error) {
-      Alert.alert('Error', 'Hubo un problema al importar los libros.');
+      setPreview(previous => previous.slice(importedCount));
+      notice.alert('Importación interrumpida', `${importedCount === 0 ? 'No se ha añadido ningún libro.' : `Se ${importedCount === 1 ? 'ha añadido 1 libro' : `han añadido ${importedCount} libros`}.`} La previsualización conserva los pendientes. Pulsa «Confirmar e importar» para reintentarlo.`, [{ text: 'Ver pendientes' }], { variant: 'error' });
+    } finally {
+      importingRef.current = false;
+      setImporting(false);
     }
   };
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
       </TouchableOpacity>
@@ -58,6 +73,7 @@ export const ImportBooksScreen = () => {
 
       <TextInput
         style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
+        editable={!importing}
         multiline
         placeholder="Ejemplo:\n2023\nEnero\n- El Quijote\n- El Principito\nFebrero\n- Dune\n2024\nMarzo\n- Otro libro"
         placeholderTextColor={colors.ink3}
@@ -65,7 +81,7 @@ export const ImportBooksScreen = () => {
         onChangeText={setText}
       />
 
-      <TouchableOpacity style={[styles.analyzeBtn, { backgroundColor: colors.accent }]} onPress={handleAnalyze}>
+      <TouchableOpacity style={[styles.analyzeBtn, { backgroundColor: colors.accent }]} disabled={importing} onPress={handleAnalyze}>
         <Text style={styles.analyzeBtnText}>Analizar texto</Text>
       </TouchableOpacity>
 
@@ -74,15 +90,15 @@ export const ImportBooksScreen = () => {
           <Text style={[styles.previewTitle, { color: colors.ink }]}>Previsualización ({preview.length} libros)</Text>
           <View style={[styles.previewList, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             {preview.map((item, index) => (
-              <View key={index} style={[styles.previewItem, index < preview.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
-                <Text style={[styles.itemTitle, { color: colors.ink }]}>{item.title}</Text>
+              <View key={index} style={[styles.previewItem, layout.compact && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }, index < preview.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
+                <Text style={[styles.itemTitle, { color: colors.ink }, layout.compact && { flex: 0 }]}>{item.title}</Text>
                 <Text style={[styles.itemMonth, { color: colors.accent2 }]}>{item.year} - Mes: {item.month}</Text>
               </View>
             ))}
           </View>
 
-          <TouchableOpacity style={[styles.importBtn, { backgroundColor: colors.ink }]} onPress={handleImport}>
-            <Text style={[styles.importBtnText, { color: colors.cream }]}>Confirmar e Importar</Text>
+          <TouchableOpacity style={[styles.importBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} disabled={importing} onPress={handleImport}>
+            <Text style={[styles.importBtnText, { color: '#FFF' }]}>Confirmar e Importar</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -1,5 +1,7 @@
+import { useNotice } from '../context/NoticeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Dimensions, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -13,17 +15,20 @@ import { BookPlaceholder } from '../components/BookPlaceholder';
 import { FadeInView } from '../components/FadeInView';
 import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
 import { deleteBook, getAllBooks, updateBook } from '../services/bookStorage';
+import { TextEditModal } from '../components/TextEditModal';
 import { HapticService } from '../services/HapticService';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HEADER_HEIGHT = 450;
 
 export const BookDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const [book, setBook] = useState<Book>(route.params?.book);
+  const notice = useNotice();
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const layout = useResponsiveLayout();
+  const [editingQuote, setEditingQuote] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -47,6 +52,7 @@ export const BookDetailScreen = () => {
   useFocusEffect(
     useCallback(() => {
       const fetchBook = async () => {
+        if (!book) return;
         const books = await getAllBooks();
         const updatedBook = books.find(b => b.id === book.id);
         if (updatedBook) {
@@ -54,52 +60,35 @@ export const BookDetailScreen = () => {
           setImageError(false);
         }
       };
-      fetchBook();
-    }, [book.id])
+      fetchBook().catch(() => notice.alert('No se puede actualizar la ficha', 'Los datos guardados no se han modificado. Vuelve a abrir el libro desde la biblioteca para intentarlo de nuevo.', [{ text: 'Entendido' }], { variant: 'error' }));
+    }, [])
   );
 
   const handleDelete = () => {
     HapticService.error();
-    Alert.alert(
+    notice.alert(
       "Eliminar libro",
-      "¿Estás seguro de que quieres eliminar este libro?",
+      `«${book.title}» y sus notas se eliminarán de tu biblioteca. Esta acción no se puede deshacer.`,
       [
         { text: "Cancelar", style: "cancel" },
         { 
           text: "Eliminar", 
           style: "destructive",
           onPress: async () => {
-            await deleteBook(book.id);
-            HapticService.success();
-            navigation.goBack();
+            try {
+              await deleteBook(book.id);
+              HapticService.success();
+              navigation.goBack();
+            } catch {
+              notice.alert('No se ha eliminado el libro', 'Vuelve a intentarlo desde la biblioteca.', [{ text: 'Entendido' }], { variant: 'error' });
+            }
           }
         }
       ]
     );
   };
 
-  const handleEditQuote = () => {
-    HapticService.light();
-    Alert.prompt(
-      "Editar cita favorita",
-      "Introduce tu cita favorita de este libro:",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Guardar",
-          onPress: async (text: string | undefined) => {
-            if (text !== undefined) {
-              const updated = await updateBook(book.id, { quote: text });
-              setBook(updated);
-              HapticService.success();
-            }
-          }
-        }
-      ],
-      'plain-text',
-      book.quote || ''
-    );
-  };
+  const handleEditQuote = () => setEditingQuote(true);
 
   if (!book) return null;
 
@@ -145,7 +134,7 @@ export const BookDetailScreen = () => {
           </Animated.View>
         </Animated.View>
 
-        <View style={styles.mainContent}>
+        <View style={[styles.mainContent, layout.contentStyle]}>
           <FadeInView delay={200} style={styles.coverWrapper}>
             {book.coverUrl && !imageError ? (
               <Image 
@@ -178,13 +167,13 @@ export const BookDetailScreen = () => {
             </View>
           </FadeInView>
 
-          <FadeInView delay={400} style={[styles.datesGrid, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-            <View style={styles.dateCol}>
+          <FadeInView delay={400} style={[styles.datesGrid, layout.rowStyle, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <View style={[styles.dateCol, layout.columnStyle]}>
               <Text style={[styles.dateLabel, { color: colors.ink3 }]}>INICIADO</Text>
               <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.startDate)}</Text>
             </View>
-            <View style={[styles.dateDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.dateCol}>
+            <View style={[styles.dateDivider, layout.compact && { width: '100%', height: 1 }, { backgroundColor: colors.border }]} />
+            <View style={[styles.dateCol, layout.columnStyle]}>
               <Text style={[styles.dateLabel, { color: colors.ink3 }]}>FINALIZADO</Text>
               <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.endDate)}</Text>
             </View>
@@ -218,11 +207,11 @@ export const BookDetailScreen = () => {
 
           <View style={styles.actions}>
             <TouchableOpacity 
-              style={[styles.editBtn, { backgroundColor: colors.ink }]} 
+              style={[styles.editBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} 
               onPress={() => { HapticService.light(); navigation.navigate('EditBook', { book }); }}
             >
-              <MaterialCommunityIcons name="pencil" size={20} color={colors.cream} />
-              <Text style={[styles.editBtnText, { color: colors.cream }]}>Editar detalles</Text>
+              <MaterialCommunityIcons name="pencil" size={20} color={'#FFF'} />
+              <Text style={[styles.editBtnText, { color: '#FFF' }]}>Editar detalles</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.error + '15' }]} onPress={handleDelete}>
@@ -232,6 +221,12 @@ export const BookDetailScreen = () => {
         </View>
       </Animated.ScrollView>
 
+      {editingQuote && <TextEditModal title="Editar cita favorita" initialValue={book.quote || ''}
+        onClose={() => setEditingQuote(false)} onSave={async value => {
+          const updated = await updateBook(book.id, { quote: value });
+          setBook(updated);
+          HapticService.success();
+        }} />}
       {/* Floating Back Button */}
       <TouchableOpacity 
         style={[styles.floatingBackBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]} 
@@ -301,6 +296,8 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   badgesContainer: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -355,6 +352,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   sectionHeader: {
+    flexWrap: 'wrap',
+    gap: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -397,12 +396,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 56,
+    minHeight: 56,
+    padding: 12,
     borderRadius: theme.borderRadius.m,
     gap: 8,
     ...theme.shadow.soft,
   },
   editBtnText: {
+    flexShrink: 1,
     ...theme.typography.body,
     fontWeight: '700',
   },

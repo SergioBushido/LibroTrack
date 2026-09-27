@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 interface Props {
   title: string;
@@ -13,9 +14,10 @@ interface Props {
 export const StatsCard: React.FC<Props> = ({ title, value, subtitle, flex = 1 }) => {
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
+  const { compact } = useResponsiveLayout();
 
   return (
-    <View style={[globalStyles.card, styles.container, { flex }]}>
+    <View style={[globalStyles.card, styles.container, { flex: compact ? 0 : flex }]}>
       <Text style={[styles.title, { color: colors.ink3 }]}>{title}</Text>
       <View style={styles.valueRow}>
         <Text style={[styles.value, { color: colors.ink }]}>{value}</Text>
@@ -37,6 +39,7 @@ const styles = StyleSheet.create({
   },
   valueRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'baseline',
     gap: 4,
   },
