@@ -585,3 +585,138 @@ test('applyReminderSettings y syncReadingChallengeReminder gestionan permisos, c
   assert.equal(JSON.parse(stored).enabled, false);
   assert.equal(scheduled.length, 2);
 });
+
+test('cloudBackupService normaliza Gist IDs, cifra token en SecureStore, sube privado y restaura con confirmación', async t => {
+  const asyncStore = new Map();
+  const secureStore = new Map();
+  asyncStore.set('lecturas_books', JSON.stringify([book('local-1', 2025, 3)]));
+
+  const requests = [];
+  let remoteBooks = [book('nube-1', 2026, 4), book('nube-2', 2026, 7)];
+  let forceTruncated = false;
+  let forceStatus = null;
+
+  t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
+    requests.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null });
+    if (forceStatus) {
+      return { ok: false, status: forceStatus, json: async () => ({}), text: async () => '' };
+    }
+    if (url.endsWith('/gists') && init.method === 'POST') {
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({ id: 'abcdef1234567890', updated_at: '2026-11-20T18:00:00.000Z' }),
+      };
+    }
+    if (url.includes('/gists/abcdef1234567890') && init.method === 'PATCH') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'abcdef1234567890', updated_at: '2026-11-20T18:05:00.000Z' }),
+      };
+    }
+    if (url.includes('/gists?per_page=30')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ([
+          { id: '111111111111', files: { 'otro.txt': {} } },
+          { id: 'abcdef1234567890', files: { 'librotrack-backup.json': {} } },
+        ]),
+      };
+    }
+    if (url.includes('/gists/abcdef1234567890') && (!init.method || init.method === 'GET')) {
+      const content = JSON.stringify({
+        app: 'LibroTrack',
+        version: '1.0.0',
+        exportedAt: '2026-11-20T18:10:00.000Z',
+        totalBooks: remoteBooks.length,
+        books: remoteBooks,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'abcdef1234567890',
+          files: {
+            'librotrack-backup.json': forceTruncated
+              ? { truncated: true, raw_url: 'https://gist.githubusercontent.com/raw/backup.json', content: '' }
+              : { truncated: false, content },
+          },
+        }),
+      };
+    }
+    if (url.includes('gist.githubusercontent.com/raw/backup.json')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          app: 'LibroTrack',
+          version: '1.0.0',
+          exportedAt: '2026-11-20T18:15:00.000Z',
+          totalBooks: remoteBooks.length,
+          books: remoteBooks,
+        }),
+      };
+    }
+    throw new Error(`URL no simulada: ${url}`);
+  });
+
+  const service = loader({
+    '@react-native-async-storage/async-storage': {
+      getItem: async key => (asyncStore.has(key) ? asyncStore.get(key) : null),
+      setItem: async (key, value) => { asyncStore.set(key, value); },
+      removeItem: async key => { asyncStore.delete(key); },
+    },
+    'expo-secure-store': {
+      getItemAsync: async key => (secureStore.has(key) ? secureStore.get(key) : null),
+      setItemAsync: async (key, value) => { secureStore.set(key, value); },
+      deleteItemAsync: async key => { secureStore.delete(key); },
+    },
+    'expo-file-system': {},
+    'expo-sharing': {},
+    'expo-document-picker': {},
+    'react-native': { Platform: { OS: 'android' } },
+  })('src/services/cloudBackupService.ts');
+
+  assert.equal(service.normalizeGistId('https://gist.github.com/SergioBushido/abcdef1234567890#file-librotrack-backup-json'), 'abcdef1234567890');
+  assert.equal(service.normalizeGistId('abcdef1234567890'), 'abcdef1234567890');
+  assert.equal(service.normalizeGistId('no-es-valido!'), null);
+
+  await assert.rejects(service.saveCloudBackupCredentials('', ''), /token personal/);
+  await assert.rejects(service.saveCloudBackupCredentials('ghp_123456', 'invalido!'), /formato válido/);
+
+  const savedCfg = await service.saveCloudBackupCredentials('ghp_secret_token_123');
+  assert.equal(savedCfg.hasToken, true);
+  assert.equal(secureStore.get(service.CLOUD_TOKEN_KEY), 'ghp_secret_token_123');
+  assert.ok(!String(asyncStore.get(service.CLOUD_META_KEY)).includes('ghp_secret_token_123'), 'el token nunca se guarda en AsyncStorage');
+
+  const firstUpload = await service.uploadCloudBackup();
+  assert.equal(firstUpload.created, true);
+  assert.equal(firstUpload.gistId, 'abcdef1234567890');
+  assert.equal(firstUpload.totalBooks, 1);
+  assert.equal(requests[0].method, 'POST');
+  assert.equal(requests[0].body.public, false);
+
+  const secondUpload = await service.uploadCloudBackup();
+  assert.equal(secondUpload.created, false);
+  assert.equal(requests[1].method, 'PATCH');
+
+  // Auto-descubrimiento desde otro dispositivo (sin gistId guardado) + archivo truncado
+  await service.saveCloudBackupCredentials('', '');
+  forceTruncated = true;
+  assert.equal(await service.downloadCloudBackup(async () => false), null);
+  assert.equal(JSON.parse(asyncStore.get('lecturas_books'))[0].id, 'local-1', 'cancelar conserva la biblioteca');
+
+  const restored = await service.downloadCloudBackup(async count => count === 2);
+  assert.equal(restored, 2);
+  assert.equal(JSON.parse(asyncStore.get('lecturas_books')).length, 2);
+  assert.equal(JSON.parse(asyncStore.get('lecturas_books'))[0].id, 'nube-1');
+
+  forceStatus = 401;
+  await assert.rejects(service.uploadCloudBackup(), /inválido o expirado/);
+
+  const cleared = await service.clearCloudBackupConfig();
+  assert.equal(cleared.hasToken, false);
+  assert.equal(secureStore.has(service.CLOUD_TOKEN_KEY), false);
+});

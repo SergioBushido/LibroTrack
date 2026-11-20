@@ -52,4 +52,4 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] Exportación CSV de la biblioteca (UTF-8 con BOM, RFC 4180 y protección ante fórmulas).
 - [x] Mejoras y animaciones con Reanimated en la pantalla de detalle (parallax, cabecera fija, movimiento reducido y vista previa de portada).
 - [x] Sistema de notificaciones locales para recordar el reto lector (frecuencia diaria/semanal, hora configurable, sincronización con progreso y aviso de prueba).
-- [ ] Sincronización en la nube para copias de seguridad.
+- [x] Sincronización en la nube para copias de seguridad (GitHub Gist privado con token cifrado en `expo-secure-store`, auto-descubrimiento y restauración validada).

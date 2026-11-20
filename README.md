@@ -72,6 +72,13 @@ La exportación CSV genera un archivo UTF-8 con BOM compatible con Excel y Googl
 Una restauración validada pide confirmación porque reemplaza toda la biblioteca, también si contiene cero libros.
 Si los datos almacenados son inválidos, la aplicación bloquea su lectura y las modificaciones normales para evitar sobrescribirlos.
 
+### Sincronización en la nube (GitHub Gist privado)
+
+En la misma sección de Estadísticas puedes conectar tu cuenta de GitHub mediante un token personal con permiso `gist`.
+- El token se guarda cifrado localmente mediante `expo-secure-store` y nunca se incluye en las copias JSON ni en `AsyncStorage`.
+- Al pulsar **Subir copia**, se crea o actualiza un **Gist privado** (`public: false`) con el archivo `librotrack-backup.json`.
+- En otro dispositivo basta con introducir el token y pulsar **Restaurar nube**: si no indicas un ID de Gist, la aplicación localiza automáticamente tu archivo `librotrack-backup.json`, valida todos los libros y solicita confirmación antes de reemplazar la biblioteca local.
+
 ## Recordatorios del reto lector
 
 En Estadísticas puedes activar notificaciones locales (`expo-notifications`) para recordar tu progreso en el reto lector anual.

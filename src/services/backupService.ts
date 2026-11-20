@@ -72,19 +72,40 @@ const writeAndShareExport = async (
   return exportFile.uri;
 };
 
+export interface BackupPayload {
+  app: 'LibroTrack';
+  version: string;
+  exportedAt: string;
+  totalBooks: number;
+  books: Book[];
+}
+
+export const createBackupPayload = (books: Book[]): BackupPayload => ({
+  app: 'LibroTrack',
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  totalBooks: books.length,
+  books,
+});
+
+export const parseBackupPayload = (content: string): { books: Book[]; exportedAt?: string } => {
+  const backup = JSON.parse(content);
+  if (!backup || backup.app !== 'LibroTrack' || !Array.isArray(backup.books)) {
+    throw new Error('Formato de backup inválido');
+  }
+  const books = validateBooks(backup.books, true);
+  return {
+    books,
+    exportedAt: typeof backup.exportedAt === 'string' ? backup.exportedAt : undefined,
+  };
+};
+
 export const exportBackup = async (): Promise<string> => {
   if (!await Sharing.isAvailableAsync()) {
     throw new Error('No se puede compartir la copia de seguridad en este dispositivo');
   }
   const books = await getAllBooks();
-
-  const backup = {
-    app: 'LibroTrack',
-    version: '1.0.0',
-    exportedAt: new Date().toISOString(),
-    totalBooks: books.length,
-    books,
-  };
+  const backup = createBackupPayload(books);
 
   const dateStamp = new Date().toISOString().split('T')[0];
   return writeAndShareExport(
@@ -129,13 +150,7 @@ export const importBackup = async (confirmReplace: (count: number) => Promise<bo
   const importFile = new File(file.uri);
   const content = await importFile.text();
 
-  const backup = JSON.parse(content);
-
-  if (!backup || backup.app !== 'LibroTrack' || !Array.isArray(backup.books)) {
-    throw new Error('Formato de backup inválido');
-  }
-
-  const booksToRestore = validateBooks(backup.books, true);
+  const { books: booksToRestore } = parseBackupPayload(content);
   if (!await confirmReplace(booksToRestore.length)) return null;
 
   await replaceAllBooks(booksToRestore);
