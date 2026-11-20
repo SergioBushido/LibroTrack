@@ -70,11 +70,11 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] **B10 / B11 / B12**: Limpiar `isFetchingCover` y `errors` en `AddBookScreen`, detener `Animated.loop` en `SkeletonLoader` y proteger promesas en `HapticService`.
 
 ### Fase 2: Refactorización, rendimiento y diseño/UX
-- [ ] Extraer formulario compartido `BookForm.tsx` para unificar `AddBookScreen` y `EditBookScreen`.
-- [ ] Virtualizar el listado de libros en `BooksScreen` con `FlatList` para grandes bibliotecas.
+- [x] Extraer formulario compartido `BookForm.tsx` para unificar `AddBookScreen` y `EditBookScreen`.
+- [x] Virtualizar el listado de libros en `BooksScreen` con `FlatList` para grandes bibliotecas.
 - [x] Reordenar jerarquía visual de `StatsScreen` (protagonismo al Reto Lector y gráficas; herramientas de mantenimiento debajo) y añadir desglose por género más leído.
-- [ ] Mejorar visualización mensual/anual en `BarChart` (barras reales o etiquetas de valor claras) — *(progreso live en sincronización de portadas ya añadido)*.
-- [ ] Añadir lint/formato automatizado en CI (`.github/workflows/ci.yml`).
+- [x] Mejorar visualización mensual/anual en `BarChart` (barras reales con etiquetas de valor y pico destacado) y progreso live en sincronización de portadas.
+- [x] Añadir lint/análisis estático automatizado (`npm run lint`) en CI (`.github/workflows/ci.yml`).
 
 ### Fase 3: Nuevas funcionalidades
 - [ ] Estados de lectura (*Leyendo ahora* con progreso, *Pendientes / Wishlist* y *Leídos*).

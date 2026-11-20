@@ -25,5 +25,8 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      - name: Static lint check
+        run: npm run lint
+
       - name: Regression tests
         run: npm test

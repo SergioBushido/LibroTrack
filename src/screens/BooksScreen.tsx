@@ -1,7 +1,7 @@
 import { useNotice } from '../context/NoticeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, ScrollView, FlatList, TouchableOpacity, Image, Platform } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Book, Rating } from '../types/Book';
@@ -419,107 +419,129 @@ export const BooksScreen = () => {
     ? `RESULTADOS (${sortedFilteredBooks.length}) · ${activeSortLabel.toUpperCase()}`
     : `${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`;
 
-  return (
-    <View style={globalStyles.container}>
-      <ScrollView
-        contentContainerStyle={[styles.listContent, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
-        {renderHeader()}
+  const renderBookItem = useCallback(
+    ({ item, index }: { item: Book; index: number }) => (
+      <BookCard
+        book={item}
+        index={index}
+        onPress={() => navigation.navigate('BookDetail', { id: item.id, book: item })}
+        onEdit={() => navigation.navigate('EditBook', { book: item })}
+        onDelete={() => handleDelete(item.id)}
+      />
+    ),
+    [navigation],
+  );
 
-        {selectedYear ? (
-          <FadeInView delay={0}>
-            <View style={styles.yearDetailHeader}>
-              <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-                <MaterialCommunityIcons name="arrow-left" size={20} color={colors.ink} />
-                <Text style={[styles.backYearText, { color: colors.ink }]}>Volver</Text>
-              </TouchableOpacity>
-              <Text style={[styles.detailTitle, { color: colors.ink }]}>{selectedYear}</Text>
-            </View>
-
-            {selectedSection && selectedSection.data.length > 0 ? (
-              selectedSection.data.map((book, index) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  index={index}
-                  onPress={() => navigation.navigate('BookDetail', { id: book.id, book })}
-                  onEdit={() => navigation.navigate('EditBook', { book })}
-                  onDelete={() => handleDelete(book.id)}
-                />
-              ))
-            ) : (
-              <EmptyState
-                icon="book-open-blank-variant"
-                title="No hay libros"
-                subtitle="No hay lecturas registradas para este filtro."
-              />
-            )}
-          </FadeInView>
-        ) : showFlatSortedList ? (
-          <View>
-            <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>
-              {flatListHeader}
+  const renderYearSectionItem = useCallback(
+    ({ item, index }: { item: BookYearSection; index: number }) => (
+      <FadeInView delay={Math.min(index, 6) * 50}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.yearCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+          onPress={() => handleYearSelect(item.title)}
+        >
+          <View style={styles.yearCardLeft}>
+            <Text style={[styles.yearTitle, { color: colors.ink }]}>{item.title}</Text>
+            <Text style={[styles.yearCount, { color: colors.accent2 }]}>
+              {item.data.length} {item.data.length === 1 ? 'libro' : 'libros'}
             </Text>
-            {sortedFilteredBooks.length > 0 ? (
-              sortedFilteredBooks.map((book, index) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  index={index}
-                  onPress={() => navigation.navigate('BookDetail', { id: book.id, book })}
-                  onEdit={() => navigation.navigate('EditBook', { book })}
-                  onDelete={() => handleDelete(book.id)}
-                />
-              ))
-            ) : (
-              <EmptyState
-                icon="book-open-blank-variant"
-                title="No hay libros"
-                subtitle="No hay lecturas registradas para este filtro."
-              />
-            )}
+          </View>
+          <View style={[styles.yearIcon, { backgroundColor: colors.accentSoft }]}>
+            <MaterialCommunityIcons name="chevron-right" size={24} color={colors.accent} />
+          </View>
+        </TouchableOpacity>
+      </FadeInView>
+    ),
+    [colors],
+  );
+
+  if (selectedYear || showFlatSortedList) {
+    const visibleBooks = selectedYear ? (selectedSection?.data ?? []) : sortedFilteredBooks;
+    const listHeader = (
+      <View>
+        {renderHeader()}
+        {selectedYear ? (
+          <View style={styles.yearDetailHeader}>
+            <TouchableOpacity onPress={handleBackToYears} style={[styles.backYearBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="arrow-left" size={20} color={colors.ink} />
+              <Text style={[styles.backYearText, { color: colors.ink }]}>Volver</Text>
+            </TouchableOpacity>
+            <Text style={[styles.detailTitle, { color: colors.ink }]}>{selectedYear}</Text>
           </View>
         ) : (
-          <View style={styles.yearGrid}>
-            <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>HISTORIAL POR AÑOS</Text>
-            {bookSections.map((section, index) => (
-              <FadeInView key={section.title} delay={index * 100}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={[styles.yearCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
-                  onPress={() => handleYearSelect(section.title)}
-                >
-                  <View style={styles.yearCardLeft}>
-                    <Text style={[styles.yearTitle, { color: colors.ink }]}>{section.title}</Text>
-                    <Text style={[styles.yearCount, { color: colors.accent2 }]}>
-                      {section.data.length} {section.data.length === 1 ? 'libro' : 'libros'}
-                    </Text>
-                  </View>
-                  <View style={[styles.yearIcon, { backgroundColor: colors.accentSoft }]}
-                    ><MaterialCommunityIcons name="chevron-right" size={24} color={colors.accent} />
-                  </View>
-                </TouchableOpacity>
-              </FadeInView>
-            ))}
-
-            <TouchableOpacity
-              style={[styles.coverButton, { borderColor: colors.border, borderWidth: 1 }]}
-              onPress={handleFetchMissingCovers}
-              disabled={updatingCovers}
-            >
-              <Text style={[styles.coverButtonText, { color: colors.ink3 }]}>
-                <MaterialCommunityIcons name="image-sync" size={14} />
-                {updatingCovers
-                  ? coverProgress.total > 0
-                    ? ` ACTUALIZANDO PORTADAS (${coverProgress.done}/${coverProgress.total})…`
-                    : ' ACTUALIZANDO…'
-                  : ' SINCRONIZAR PORTADAS'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>{flatListHeader}</Text>
         )}
-      </ScrollView>
+      </View>
+    );
+
+    return (
+      <View style={globalStyles.container}>
+        <FlatList
+          data={visibleBooks}
+          keyExtractor={item => item.id}
+          renderItem={renderBookItem}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={
+            <EmptyState
+              icon="book-open-blank-variant"
+              title="No hay libros"
+              subtitle="No hay lecturas registradas para este filtro."
+            />
+          }
+          contentContainerStyle={[styles.listContent, layout.contentStyle]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={globalStyles.container}>
+      <FlatList
+        data={bookSections}
+        keyExtractor={item => item.title}
+        renderItem={renderYearSectionItem}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        ListHeaderComponent={
+          <View>
+            {renderHeader()}
+            <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>HISTORIAL POR AÑOS</Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="book-open-blank-variant"
+            title="Tu biblioteca está vacía"
+            subtitle="Pulsa el botón + para registrar tu primer libro o restaura una copia desde Estadísticas."
+          />
+        }
+        ListFooterComponent={
+          <TouchableOpacity
+            style={[styles.coverButton, { borderColor: colors.border, borderWidth: 1 }]}
+            onPress={handleFetchMissingCovers}
+            disabled={updatingCovers}
+          >
+            <Text style={[styles.coverButtonText, { color: colors.ink3 }]}>
+              <MaterialCommunityIcons name="image-sync" size={14} />
+              {updatingCovers
+                ? coverProgress.total > 0
+                  ? ` ACTUALIZANDO PORTADAS (${coverProgress.done}/${coverProgress.total})…`
+                  : ' ACTUALIZANDO…'
+                : ' SINCRONIZAR PORTADAS'}
+            </Text>
+          </TouchableOpacity>
+        }
+        contentContainerStyle={[styles.listContent, layout.contentStyle]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };

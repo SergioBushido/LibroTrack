@@ -788,3 +788,20 @@ test('searchBooksOnGoogle propaga errores HTTP y AbortError en lugar de ocultarl
   controller.abort();
   await assert.rejects(searchBooksOnGoogle('Dune', controller.signal), { name: 'AbortError' });
 });
+
+test('computeBarChartMetrics calcula totales, picos, proporciones y maneja ceros con seguridad', () => {
+  const { computeBarChartMetrics } = loader()('src/utils/chartMetrics.ts');
+  const empty = computeBarChartMetrics([0, 0, 0], ['2024', '2025', '2026']);
+  assert.equal(empty.hasData, false);
+  assert.equal(empty.total, 0);
+  assert.equal(empty.peakLabel, null);
+  assert.deepEqual(empty.entries.map(item => item.ratio), [0, 0, 0]);
+
+  const active = computeBarChartMetrics([2, 8, 4], ['2024', '2025', '2026']);
+  assert.equal(active.hasData, true);
+  assert.equal(active.total, 14);
+  assert.equal(active.maxValue, 8);
+  assert.equal(active.peakLabel, '2025');
+  assert.deepEqual(active.entries.map(item => item.ratio), [0.25, 1, 0.5]);
+  assert.deepEqual(active.entries.map(item => item.isPeak), [false, true, false]);
+});
