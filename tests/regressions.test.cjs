@@ -463,3 +463,125 @@ test('las animaciones de detalle calculan parallax, cabecera fija, movimiento re
   assert.equal(formatReadingDuration(0), '0 días');
   assert.equal(formatReadingDuration(-3), '0 días');
 });
+
+test('los recordatorios del reto lector generan mensajes, triggers y saneado de ajustes', () => {
+  const service = loader({
+    '@react-native-async-storage/async-storage': {},
+    'expo-notifications': {
+      SchedulableTriggerInputTypes: { DAILY: 'daily', WEEKLY: 'weekly', TIME_INTERVAL: 'timeInterval' },
+    },
+    'react-native': { Platform: { OS: 'android' } },
+  })('src/services/notificationService.ts');
+
+  const normalized = service.normalizeReminderSettings({
+    enabled: 1,
+    frequency: 'otro',
+    weekday: 99,
+    hour: -4,
+    minute: 75,
+    notificationId: '   ',
+  });
+  assert.deepEqual(normalized, {
+    enabled: true,
+    frequency: 'weekly',
+    weekday: 7,
+    hour: 0,
+    minute: 59,
+    notificationId: null,
+  });
+
+  const zeroMsg = service.buildReadingChallengeNotification({ year: 2026, current: 0, goal: 12 });
+  assert.match(zeroMsg.title, /2026/);
+  assert.match(zeroMsg.body, /12 libros/);
+
+  const midMsg = service.buildReadingChallengeNotification({ year: 2026, current: 11, goal: 12 });
+  assert.equal(midMsg.title, 'Reto lector 2026: 11/12 (92%)');
+  assert.match(midMsg.body, /falta 1 libro/);
+
+  const doneMsg = service.buildReadingChallengeNotification({ year: 2026, current: 15, goal: 12 });
+  assert.equal(doneMsg.title, 'Reto lector 2026 completado');
+  assert.match(doneMsg.body, /15 de 12 libros/);
+
+  assert.deepEqual(
+    service.buildReminderTrigger({ frequency: 'daily', weekday: 2, hour: 21, minute: 30 }, 'reto-lector'),
+    { type: 'daily', hour: 21, minute: 30, channelId: 'reto-lector' },
+  );
+  assert.deepEqual(
+    service.buildReminderTrigger({ frequency: 'weekly', weekday: 2, hour: 9, minute: 5 }),
+    { type: 'weekly', weekday: 2, hour: 9, minute: 5 },
+  );
+  assert.equal(service.formatReminderSummary({ ...normalized, enabled: false }), 'Desactivado');
+  assert.equal(
+    service.formatReminderSummary({ ...normalized, enabled: true, frequency: 'daily', hour: 20, minute: 0 }),
+    'Todos los días a las 20:00',
+  );
+  assert.equal(
+    service.formatReminderSummary({ ...normalized, enabled: true, frequency: 'weekly', weekday: 2, hour: 9, minute: 5 }),
+    'Cada lunes a las 09:05',
+  );
+});
+
+test('applyReminderSettings y syncReadingChallengeReminder gestionan permisos, cancelación y reprogramación', async () => {
+  let stored = null;
+  let granted = true;
+  let nextId = 1;
+  const scheduled = [];
+  const canceled = [];
+  const channels = [];
+
+  const service = loader({
+    '@react-native-async-storage/async-storage': {
+      getItem: async () => stored,
+      setItem: async (_, value) => { stored = value; },
+    },
+    'expo-notifications': {
+      SchedulableTriggerInputTypes: { DAILY: 'daily', WEEKLY: 'weekly', TIME_INTERVAL: 'timeInterval' },
+      AndroidImportance: { DEFAULT: 3 },
+      setNotificationHandler: () => {},
+      setNotificationChannelAsync: async (id, config) => { channels.push({ id, config }); },
+      getPermissionsAsync: async () => ({ granted, status: granted ? 'granted' : 'denied' }),
+      requestPermissionsAsync: async () => ({ granted, status: granted ? 'granted' : 'denied' }),
+      scheduleNotificationAsync: async req => {
+        const id = `notif-${nextId++}`;
+        scheduled.push({ id, req });
+        return id;
+      },
+      cancelScheduledNotificationAsync: async id => { canceled.push(id); },
+    },
+    'react-native': { Platform: { OS: 'android' } },
+  })('src/services/notificationService.ts');
+
+  const enabled = await service.applyReminderSettings(
+    { enabled: true, frequency: 'weekly', weekday: 1, hour: 20, minute: 0 },
+    { year: 2026, current: 4, goal: 20 },
+  );
+  assert.equal(enabled.enabled, true);
+  assert.equal(enabled.notificationId, 'notif-1');
+  assert.equal(channels.length, 1);
+  assert.equal(scheduled[0].req.trigger.type, 'weekly');
+  assert.equal(scheduled[0].req.trigger.channelId, 'reto-lector');
+
+  await service.syncReadingChallengeReminder({ year: 2026, current: 5, goal: 20 });
+  assert.deepEqual(canceled, ['notif-1']);
+  assert.equal(scheduled.length, 2);
+  assert.match(scheduled[1].req.content.title, /5\/20/);
+
+  const disabled = await service.applyReminderSettings(
+    { enabled: false, frequency: 'weekly', weekday: 1, hour: 20, minute: 0 },
+    { year: 2026, current: 5, goal: 20 },
+  );
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.notificationId, null);
+  assert.deepEqual(canceled, ['notif-1', 'notif-2']);
+
+  granted = false;
+  await assert.rejects(
+    service.applyReminderSettings(
+      { enabled: true, frequency: 'daily', weekday: 1, hour: 20, minute: 0 },
+      { year: 2026, current: 5, goal: 20 },
+    ),
+    /Permiso de notificaciones denegado/,
+  );
+  assert.equal(JSON.parse(stored).enabled, false);
+  assert.equal(scheduled.length, 2);
+});

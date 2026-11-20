@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { NoticeProvider } from './src/context/NoticeContext';
+import { configureNotificationHandler } from './src/services/notificationService';
 
 const MainApp = () => {
   const { colors, isDark } = useTheme();
@@ -20,6 +21,10 @@ const MainApp = () => {
 };
 
 export default function App() {
+  useEffect(() => {
+    configureNotificationHandler();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>

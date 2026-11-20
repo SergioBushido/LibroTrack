@@ -15,8 +15,10 @@ import { EmptyState } from '../components/EmptyState';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { TextEditModal } from '../components/TextEditModal';
 import { BackupActions } from '../components/BackupActions';
+import { ReminderSettingsCard } from '../components/ReminderSettingsCard';
 import { FadeInView } from '../components/FadeInView';
 import { HapticService } from '../services/HapticService';
+import { syncReadingChallengeReminder } from '../services/notificationService';
 
 const GOAL_KEY = 'lecturas_reto_goal';
 
@@ -25,6 +27,7 @@ export const StatsScreen = () => {
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [currentYearCount, setCurrentYearCount] = useState(0);
   const [goal, setGoal] = useState(20);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const { colors, isDark, toggleTheme } = useTheme();
@@ -41,7 +44,17 @@ export const StatsScreen = () => {
 
       const books = await getAllBooks();
       const newStats = calculateStats(books, currentGoal, selectedYear);
+      const realYear = new Date().getFullYear();
+      const currentYearStats = selectedYear === realYear
+        ? newStats
+        : calculateStats(books, currentGoal, realYear);
+      setCurrentYearCount(currentYearStats.booksThisYear);
       setStats(newStats);
+      syncReadingChallengeReminder({
+        year: realYear,
+        current: currentYearStats.booksThisYear,
+        goal: currentGoal,
+      }).catch(() => undefined);
     } catch (e) {
       console.error(e);
       setLoadError(true);
@@ -90,6 +103,7 @@ export const StatsScreen = () => {
           subtitle={loadError ? 'Los datos no se han modificado. Puedes reintentar o restaurar una copia válida.' : 'Añade libros o importa una copia de seguridad.'}
         />
         {loadError && <TouchableOpacity onPress={() => loadData()}><Text style={{ color: colors.accent }}>Reintentar</Text></TouchableOpacity>}
+        <ReminderSettingsCard progress={{ year: new Date().getFullYear(), current: currentYearCount, goal }} />
         <BackupActions onRestored={() => loadData(true)} />
       </ScrollView>
     );
@@ -151,6 +165,7 @@ export const StatsScreen = () => {
         predictionText={predictionText}
         onEditGoal={handleEditGoal}
       />
+      <ReminderSettingsCard progress={{ year: new Date().getFullYear(), current: currentYearCount, goal }} />
 
       <FadeInView delay={200} style={[styles.grid2x2, layout.rowStyle]}>
         <StatsCard title={isTotal ? "Total" : "Año"} value={isTotal ? stats.totalBooks : stats.booksThisYear} subtitle="libros" />

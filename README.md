@@ -72,6 +72,13 @@ La exportación CSV genera un archivo UTF-8 con BOM compatible con Excel y Googl
 Una restauración validada pide confirmación porque reemplaza toda la biblioteca, también si contiene cero libros.
 Si los datos almacenados son inválidos, la aplicación bloquea su lectura y las modificaciones normales para evitar sobrescribirlos.
 
+## Recordatorios del reto lector
+
+En Estadísticas puedes activar notificaciones locales (`expo-notifications`) para recordar tu progreso en el reto lector anual.
+Puedes elegir frecuencia diaria o semanal (de lunes a domingo), ajustar la hora y enviar un aviso de prueba para comprobar permisos y sonido.
+Al registrar nuevos libros o cambiar el objetivo anual, el texto del recordatorio programado se actualiza automáticamente con tu progreso real.
+En Android se configura el canal `reto-lector`. Los recordatorios se almacenan localmente en el dispositivo y no requieren servidor.
+
 Para importar notas, utiliza encabezados como `2024` seguido de `Enero`, o un año explícito como `Año 2024`.
 Los títulos ambiguos deben llevar una viñeta: `- 1984` o `- Mayo`. Revisa la previsualización antes de importar.
 Si falla una importación parcial, la previsualización conserva solo los libros pendientes para reintentarlos.

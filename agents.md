@@ -51,5 +51,5 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] Copias de seguridad JSON locales (exportar y restaurar con validación).
 - [x] Exportación CSV de la biblioteca (UTF-8 con BOM, RFC 4180 y protección ante fórmulas).
 - [x] Mejoras y animaciones con Reanimated en la pantalla de detalle (parallax, cabecera fija, movimiento reducido y vista previa de portada).
-- [ ] Sistema de notificaciones locales para recordar el reto lector.
+- [x] Sistema de notificaciones locales para recordar el reto lector (frecuencia diaria/semanal, hora configurable, sincronización con progreso y aviso de prueba).
 - [ ] Sincronización en la nube para copias de seguridad.
