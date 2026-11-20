@@ -5,7 +5,6 @@ import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Activi
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Animated, { FadeIn, FadeInDown, FadeOut, Layout } from 'react-native-reanimated';
 import { Book, Rating } from '../types/Book';
 import { getAllBooks, deleteBook, updateBook, initializeBooksOnFirstRun } from '../services/bookStorage';
 import { createInitialLibrary } from '../services/initialLibrary';

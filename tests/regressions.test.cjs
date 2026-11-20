@@ -419,3 +419,47 @@ test('las peticiones lentas se cancelan a los seis segundos y permiten reintenta
   t.mock.timers.tick(6000);
   assert.equal(await fallback, null);
 });
+
+test('las animaciones de detalle calculan parallax, cabecera fija, movimiento reducido y duración', () => {
+  const {
+    computeBookDetailMotion,
+    formatReadingDuration,
+    DETAIL_HEADER_HEIGHT,
+    STICKY_HEADER_START,
+    STICKY_HEADER_END,
+  } = loader()('src/utils/bookDetailMotion.ts');
+
+  const atRest = computeBookDetailMotion(0, false);
+  assert.equal(atRest.headerTranslateY, 0);
+  assert.equal(atRest.headerScale, 1);
+  assert.equal(atRest.coverScale, 1);
+  assert.equal(atRest.stickyBarOpacity, 0);
+  assert.equal(atRest.stickyTitleTranslateY, 10);
+
+  const overscroll = computeBookDetailMotion(-DETAIL_HEADER_HEIGHT, false);
+  assert.equal(overscroll.headerScale, 1.5);
+  assert.ok(overscroll.headerTranslateY < 0);
+
+  const midSticky = computeBookDetailMotion((STICKY_HEADER_START + STICKY_HEADER_END) / 2, false);
+  assert.ok(midSticky.stickyBarOpacity > 0.45 && midSticky.stickyBarOpacity < 0.55);
+  assert.ok(midSticky.coverScale < 1 && midSticky.coverScale >= 0.92);
+
+  const scrolled = computeBookDetailMotion(DETAIL_HEADER_HEIGHT * 2, false);
+  assert.equal(scrolled.stickyBarOpacity, 1);
+  assert.equal(scrolled.stickyTitleTranslateY, 0);
+  assert.equal(scrolled.headerScale, 1);
+  assert.equal(scrolled.coverScale, 0.92);
+
+  const reduced = computeBookDetailMotion(DETAIL_HEADER_HEIGHT, true);
+  assert.equal(reduced.headerTranslateY, 0);
+  assert.equal(reduced.headerScale, 1);
+  assert.equal(reduced.coverScale, 1);
+  assert.equal(reduced.coverTranslateY, 0);
+  assert.equal(reduced.stickyBarOpacity, 1);
+  assert.equal(reduced.stickyTitleTranslateY, 0);
+
+  assert.equal(formatReadingDuration(1), '1 día');
+  assert.equal(formatReadingDuration(12), '12 días');
+  assert.equal(formatReadingDuration(0), '0 días');
+  assert.equal(formatReadingDuration(-3), '0 días');
+});

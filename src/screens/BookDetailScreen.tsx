@@ -1,239 +1,525 @@
-import { useNotice } from '../context/NoticeContext';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Pressable,
+  Image,
+  Modal,
+  Platform,
+  StyleProp,
+  ViewStyle,
+} from 'react-native';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { BlurView } from 'expo-blur';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  ZoomIn,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { Book } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { useNotice } from '../context/NoticeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { RatingBadge } from '../components/RatingBadge';
 import { QuoteBlock } from '../components/QuoteBlock';
 import { BookPlaceholder } from '../components/BookPlaceholder';
-import { FadeInView } from '../components/FadeInView';
-import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
-import { deleteBook, getAllBooks, updateBook } from '../services/bookStorage';
 import { TextEditModal } from '../components/TextEditModal';
+import { formatShortDate, calculateReadingDays } from '../utils/dateUtils';
+import {
+  DETAIL_HEADER_HEIGHT,
+  computeBookDetailMotion,
+  formatReadingDuration,
+} from '../utils/bookDetailMotion';
+import { deleteBook, getAllBooks, updateBook } from '../services/bookStorage';
 import { HapticService } from '../services/HapticService';
 
-const HEADER_HEIGHT = 450;
+const SPRING_CONFIG = { damping: 16, stiffness: 260, mass: 0.8 };
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+interface ScalePressableProps {
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+  accessibilityLabel: string;
+  reducedMotion: boolean;
+  children: React.ReactNode;
+}
+
+const ScalePressable: React.FC<ScalePressableProps> = ({
+  onPress,
+  style,
+  accessibilityLabel,
+  reducedMotion,
+  children,
+}) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    if (!reducedMotion) {
+      scale.value = withSpring(0.96, SPRING_CONFIG);
+    }
+  };
+
+  const handlePressOut = () => {
+    if (!reducedMotion) {
+      scale.value = withSpring(1, SPRING_CONFIG);
+    }
+  };
+
+  return (
+    <AnimatedPressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={[style, animatedStyle]}
+    >
+      {children}
+    </AnimatedPressable>
+  );
+};
 
 export const BookDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<StackNavigationProp<any>>();
-  const [book, setBook] = useState<Book>(route.params?.book);
+  const initialBook: Book | undefined = route.params?.book;
+  const bookId = initialBook?.id;
+  const [book, setBook] = useState<Book | undefined>(initialBook);
   const notice = useNotice();
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
   const layout = useResponsiveLayout();
+  const reducedMotion = Boolean(useReducedMotion());
   const [editingQuote, setEditingQuote] = useState(false);
+  const [coverPreviewOpen, setCoverPreviewOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollY = useSharedValue(0);
+  const coverPressScale = useSharedValue(1);
 
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-    outputRange: [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75],
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
   });
 
-  const headerScale = scrollY.interpolate({
-    inputRange: [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-    outputRange: [2, 1, 1],
-  });
+  const headerBackdropStyle = useAnimatedStyle(() => {
+    const motion = computeBookDetailMotion(scrollY.value, reducedMotion);
+    return {
+      opacity: motion.backdropOpacity,
+      transform: [
+        { translateY: motion.headerTranslateY },
+        { scale: motion.headerScale },
+      ],
+    };
+  }, [reducedMotion]);
 
-  const blurOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_HEIGHT / 2],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const blurOverlayStyle = useAnimatedStyle(() => {
+    const motion = computeBookDetailMotion(scrollY.value, reducedMotion);
+    return {
+      opacity: motion.blurOpacity,
+    };
+  }, [reducedMotion]);
+
+  const coverAnimatedStyle = useAnimatedStyle(() => {
+    const motion = computeBookDetailMotion(scrollY.value, reducedMotion);
+    return {
+      opacity: motion.coverOpacity,
+      transform: [
+        { translateY: motion.coverTranslateY },
+        { scale: motion.coverScale * coverPressScale.value },
+      ],
+    };
+  }, [reducedMotion]);
+
+  const stickyBarBgStyle = useAnimatedStyle(() => {
+    const motion = computeBookDetailMotion(scrollY.value, reducedMotion);
+    return {
+      opacity: motion.stickyBarOpacity,
+    };
+  }, [reducedMotion]);
+
+  const stickyTitleStyle = useAnimatedStyle(() => {
+    const motion = computeBookDetailMotion(scrollY.value, reducedMotion);
+    return {
+      opacity: motion.stickyBarOpacity,
+      transform: [{ translateY: motion.stickyTitleTranslateY }],
+    };
+  }, [reducedMotion]);
+
+  const sectionEntering = (delay: number) => (
+    reducedMotion ? undefined : FadeInDown.delay(delay).duration(380).springify().damping(18)
+  );
 
   useFocusEffect(
     useCallback(() => {
+      if (!bookId) return;
+      let active = true;
       const fetchBook = async () => {
-        if (!book) return;
         const books = await getAllBooks();
-        const updatedBook = books.find(b => b.id === book.id);
+        if (!active) return;
+        const updatedBook = books.find(b => b.id === bookId);
         if (updatedBook) {
           setBook(updatedBook);
           setImageError(false);
         }
       };
-      fetchBook().catch(() => notice.alert('No se puede actualizar la ficha', 'Los datos guardados no se han modificado. Vuelve a abrir el libro desde la biblioteca para intentarlo de nuevo.', [{ text: 'Entendido' }], { variant: 'error' }));
-    }, [])
+      fetchBook().catch(() => {
+        if (active) {
+          notice.alert(
+            'No se puede actualizar la ficha',
+            'Los datos guardados no se han modificado. Vuelve a abrir el libro desde la biblioteca para intentarlo de nuevo.',
+            [{ text: 'Entendido' }],
+            { variant: 'error' },
+          );
+        }
+      });
+      return () => { active = false; };
+    }, [bookId])
   );
 
   const handleDelete = () => {
+    if (!book) return;
     HapticService.error();
     notice.alert(
-      "Eliminar libro",
+      'Eliminar libro',
       `«${book.title}» y sus notas se eliminarán de tu biblioteca. Esta acción no se puede deshacer.`,
       [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Eliminar", 
-          style: "destructive",
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
           onPress: async () => {
             try {
               await deleteBook(book.id);
               HapticService.success();
               navigation.goBack();
             } catch {
-              notice.alert('No se ha eliminado el libro', 'Vuelve a intentarlo desde la biblioteca.', [{ text: 'Entendido' }], { variant: 'error' });
+              notice.alert(
+                'No se ha eliminado el libro',
+                'Vuelve a intentarlo desde la biblioteca.',
+                [{ text: 'Entendido' }],
+                { variant: 'error' },
+              );
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
-  const handleEditQuote = () => setEditingQuote(true);
+  const handleEditBook = () => {
+    if (!book) return;
+    HapticService.light();
+    navigation.navigate('EditBook', { book });
+  };
+
+  const handleEditQuote = () => {
+    HapticService.light();
+    setEditingQuote(true);
+  };
 
   if (!book) return null;
 
   const days = calculateReadingDays(book.startDate, book.endDate);
+  const durationLabel = formatReadingDuration(days);
+  const hasCover = Boolean(book.coverUrl && !imageError);
 
   return (
     <View style={globalStyles.container}>
-      <Animated.ScrollView 
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
+      <Animated.ScrollView
+        onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Animated.View 
-          style={[
-            styles.headerImageContainer, 
-            {
-              transform: [
-                { translateY: headerTranslateY },
-                { scale: headerScale }
-              ]
-            }
-          ]}
-        >
-          {book.coverUrl && !imageError ? (
-            <Image 
-              source={{ uri: book.coverUrl }} 
-              style={styles.bgImage} 
-              blurRadius={Platform.OS === 'ios' ? 0 : 10}
+        <Animated.View style={[styles.headerImageContainer, headerBackdropStyle]}>
+          {hasCover ? (
+            <Image
+              source={{ uri: book.coverUrl }}
+              style={styles.bgImage}
+              blurRadius={Platform.OS === 'ios' ? 4 : 12}
             />
           ) : (
-            <View style={[styles.bgImage, { backgroundColor: colors.ink }]} />
+            <View style={[styles.bgImage, { backgroundColor: colors.accent }]} />
           )}
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
-            <BlurView 
-              intensity={isDark ? 40 : 60} 
-              tint={isDark ? 'dark' : 'light'} 
-              style={StyleSheet.absoluteFill} 
+          <Animated.View style={[StyleSheet.absoluteFill, blurOverlayStyle]}>
+            <BlurView
+              intensity={isDark ? 45 : 65}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
             />
           </Animated.View>
+          <View style={[styles.heroScrimMid, { backgroundColor: colors.cream, opacity: 0.45 }]} />
+          <View style={[styles.heroScrimBottom, { backgroundColor: colors.cream }]} />
         </Animated.View>
 
         <View style={[styles.mainContent, layout.contentStyle]}>
-          <FadeInView delay={200} style={styles.coverWrapper}>
-            {book.coverUrl && !imageError ? (
-              <Image 
-                source={{ uri: book.coverUrl }} 
-                style={styles.detailCover} 
-                resizeMode="cover" 
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <BookPlaceholder title={book.title} author={book.author} height={320} />
-            )}
-          </FadeInView>
+          <Animated.View entering={sectionEntering(80)} style={[styles.coverOuter, coverAnimatedStyle]}>
+            <Pressable
+              accessibilityRole={hasCover ? 'button' : 'image'}
+              accessibilityLabel={hasCover ? `Ver portada de ${book.title} a pantalla completa` : `Portada de ${book.title}`}
+              disabled={!hasCover}
+              onPressIn={() => {
+                if (hasCover && !reducedMotion) {
+                  coverPressScale.value = withSpring(0.96, SPRING_CONFIG);
+                }
+              }}
+              onPressOut={() => {
+                if (hasCover && !reducedMotion) {
+                  coverPressScale.value = withSpring(1, SPRING_CONFIG);
+                }
+              }}
+              onPress={() => {
+                if (hasCover) {
+                  HapticService.selection();
+                  setCoverPreviewOpen(true);
+                }
+              }}
+              style={[styles.coverWrapper, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
+              {hasCover ? (
+                <Image
+                  source={{ uri: book.coverUrl }}
+                  style={styles.detailCover}
+                  resizeMode="cover"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <BookPlaceholder title={book.title} author={book.author} height={320} />
+              )}
+            </Pressable>
+          </Animated.View>
 
-          <FadeInView delay={300} style={styles.infoBox}>
-            {book.genre && <Text style={[styles.genre, { color: colors.accent2 }]}>{book.genre.toUpperCase()}</Text>}
+          <Animated.View entering={sectionEntering(150)} style={styles.infoBox}>
+            {book.genre ? (
+              <Text style={[styles.genre, { color: colors.accent2 }]}>{book.genre.toUpperCase()}</Text>
+            ) : null}
             <Text style={[styles.title, { color: colors.ink }]}>{book.title}</Text>
-            {book.author && <Text style={[styles.author, { color: colors.ink2 }]}>{book.author}</Text>}
-            
+            {book.author ? (
+              <Text style={[styles.author, { color: colors.ink2 }]}>{book.author}</Text>
+            ) : null}
+
             <View style={styles.badgesContainer}>
               <RatingBadge rating={book.rating} />
-              {book.mood && (
+              {book.mood ? (
                 <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                   <Text style={styles.moodEmoji}>{book.mood}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                 <MaterialCommunityIcons name="clock-outline" size={16} color={colors.ink3} />
-                <Text style={[styles.badgeText, { color: colors.ink2 }]}>{days} días</Text>
+                <Text style={[styles.badgeText, { color: colors.ink2 }]}>{durationLabel}</Text>
               </View>
             </View>
-          </FadeInView>
+          </Animated.View>
 
-          <FadeInView delay={400} style={[styles.datesGrid, layout.rowStyle, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <Animated.View
+            entering={sectionEntering(220)}
+            style={[styles.datesGrid, layout.rowStyle, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+          >
             <View style={[styles.dateCol, layout.columnStyle]}>
               <Text style={[styles.dateLabel, { color: colors.ink3 }]}>INICIADO</Text>
               <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.startDate)}</Text>
             </View>
-            <View style={[styles.dateDivider, layout.compact && { width: '100%', height: 1 }, { backgroundColor: colors.border }]} />
+            <View
+              style={[
+                styles.dateDivider,
+                layout.compact && { width: '100%', height: 1 },
+                { backgroundColor: colors.border },
+              ]}
+            />
             <View style={[styles.dateCol, layout.columnStyle]}>
               <Text style={[styles.dateLabel, { color: colors.ink3 }]}>FINALIZADO</Text>
               <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.endDate)}</Text>
             </View>
-          </FadeInView>
+          </Animated.View>
 
-          {book.notes && (
-            <FadeInView delay={500} style={styles.section}>
+          {book.notes ? (
+            <Animated.View entering={sectionEntering(290)} style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.ink }]}>Notas personales</Text>
-              <View style={[styles.notesBox, { borderLeftColor: colors.gold, backgroundColor: colors.cardBg }]}>
+              <View
+                style={[
+                  styles.notesBox,
+                  { borderLeftColor: colors.gold, backgroundColor: colors.cardBg, borderColor: colors.border },
+                ]}
+              >
                 <Text style={[styles.notesText, { color: colors.ink2 }]}>{book.notes}</Text>
               </View>
-            </FadeInView>
-          )}
+            </Animated.View>
+          ) : null}
 
-          <FadeInView delay={600} style={styles.section}>
+          <Animated.View entering={sectionEntering(350)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.ink }]}>Cita favorita</Text>
-              <TouchableOpacity onPress={handleEditQuote}>
-                <MaterialCommunityIcons name={book.quote ? "pencil" : "plus"} size={20} color={colors.accent2} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={book.quote ? 'Editar cita favorita' : 'Añadir cita favorita'}
+                hitSlop={10}
+                onPress={handleEditQuote}
+              >
+                <MaterialCommunityIcons name={book.quote ? 'pencil' : 'plus'} size={20} color={colors.accent2} />
               </TouchableOpacity>
             </View>
-            
+
             {book.quote ? (
-              <QuoteBlock quote={book.quote} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Editar cita favorita"
+                activeOpacity={0.85}
+                onPress={handleEditQuote}
+              >
+                <QuoteBlock quote={book.quote} />
+              </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[styles.addQuoteBtn, { borderColor: colors.border }]} onPress={handleEditQuote}>
-                <Text style={[styles.addQuoteText, { color: colors.ink3 }]}>Toca para añadir un fragmento inolvidable...</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Añadir cita favorita"
+                style={[styles.addQuoteBtn, { borderColor: colors.border, backgroundColor: colors.cardBg }]}
+                onPress={handleEditQuote}
+              >
+                <Text style={[styles.addQuoteText, { color: colors.ink3 }]}>
+                  Toca para añadir un fragmento inolvidable...
+                </Text>
               </TouchableOpacity>
             )}
-          </FadeInView>
+          </Animated.View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity 
-              style={[styles.editBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} 
-              onPress={() => { HapticService.light(); navigation.navigate('EditBook', { book }); }}
+          <Animated.View entering={sectionEntering(410)} style={styles.actions}>
+            <ScalePressable
+              accessibilityLabel={`Editar detalles de ${book.title}`}
+              reducedMotion={reducedMotion}
+              style={[styles.editBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]}
+              onPress={handleEditBook}
             >
-              <MaterialCommunityIcons name="pencil" size={20} color={'#FFF'} />
+              <MaterialCommunityIcons name="pencil" size={20} color="#FFF" />
               <Text style={[styles.editBtnText, { color: '#FFF' }]}>Editar detalles</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.error + '15' }]} onPress={handleDelete}>
+            </ScalePressable>
+
+            <ScalePressable
+              accessibilityLabel={`Eliminar ${book.title}`}
+              reducedMotion={reducedMotion}
+              style={[styles.deleteBtn, { backgroundColor: colors.error + '15', borderColor: colors.error + '35' }]}
+              onPress={handleDelete}
+            >
               <MaterialCommunityIcons name="delete-outline" size={24} color={colors.error} />
-            </TouchableOpacity>
-          </View>
+            </ScalePressable>
+          </Animated.View>
         </View>
       </Animated.ScrollView>
 
-      {editingQuote && <TextEditModal title="Editar cita favorita" initialValue={book.quote || ''}
-        onClose={() => setEditingQuote(false)} onSave={async value => {
-          const updated = await updateBook(book.id, { quote: value });
-          setBook(updated);
-          HapticService.success();
-        }} />}
-      {/* Floating Back Button */}
-      <TouchableOpacity 
-        style={[styles.floatingBackBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]} 
-        onPress={() => { HapticService.light(); navigation.goBack(); }}
+      {/* Dynamic Sticky Header Bar */}
+      <View style={styles.stickyHeader} pointerEvents="box-none">
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            styles.stickyHeaderBg,
+            { backgroundColor: colors.glass, borderBottomColor: colors.border },
+            stickyBarBgStyle,
+          ]}
+        />
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Volver a la biblioteca"
+          style={[styles.headerActionBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
+          onPress={() => {
+            HapticService.light();
+            navigation.goBack();
+          }}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={22} color={colors.ink} />
+        </TouchableOpacity>
+
+        <Animated.View pointerEvents="none" style={[styles.stickyTitleContainer, stickyTitleStyle]}>
+          <Text style={[styles.stickyTitle, { color: colors.ink }]} numberOfLines={1}>
+            {book.title}
+          </Text>
+          {book.author ? (
+            <Text style={[styles.stickyAuthor, { color: colors.ink3 }]} numberOfLines={1}>
+              {book.author}
+            </Text>
+          ) : null}
+        </Animated.View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Editar libro"
+          style={[styles.headerActionBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
+          onPress={handleEditBook}
+        >
+          <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.ink} />
+        </TouchableOpacity>
+      </View>
+
+      {editingQuote ? (
+        <TextEditModal
+          title="Editar cita favorita"
+          initialValue={book.quote || ''}
+          onClose={() => setEditingQuote(false)}
+          onSave={async value => {
+            const updated = await updateBook(book.id, { quote: value });
+            setBook(updated);
+            HapticService.success();
+          }}
+        />
+      ) : null}
+
+      <Modal
+        visible={coverPreviewOpen && hasCover}
+        transparent
+        animationType="none"
+        onRequestClose={() => setCoverPreviewOpen(false)}
       >
-        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
-      </TouchableOpacity>
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(220)}
+          style={styles.previewBackdrop}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar vista de portada"
+            style={StyleSheet.absoluteFill}
+            onPress={() => setCoverPreviewOpen(false)}
+          />
+          <Animated.View
+            entering={reducedMotion ? undefined : ZoomIn.duration(260).springify().damping(18)}
+            style={styles.previewCard}
+            pointerEvents="box-none"
+          >
+            {book.coverUrl ? (
+              <Image
+                source={{ uri: book.coverUrl }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            ) : null}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar vista de portada"
+              style={[styles.previewCloseBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+              onPress={() => setCoverPreviewOpen(false)}
+            >
+              <MaterialCommunityIcons name="close" size={20} color={colors.ink} />
+              <Text style={[styles.previewCloseText, { color: colors.ink }]}>Cerrar</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };
@@ -247,26 +533,42 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: HEADER_HEIGHT,
+    height: DETAIL_HEADER_HEIGHT,
     zIndex: -1,
+    overflow: 'hidden',
   },
   bgImage: {
     width: '100%',
     height: '100%',
-    opacity: 0.5,
+  },
+  heroScrimMid: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 56,
+    height: 96,
+  },
+  heroScrimBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 60,
   },
   mainContent: {
-    marginTop: HEADER_HEIGHT - 280,
+    marginTop: 72,
     paddingHorizontal: theme.spacing.l,
   },
-  coverWrapper: {
+  coverOuter: {
     alignSelf: 'center',
+  },
+  coverWrapper: {
     width: 210,
     height: 320,
     borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
     ...theme.shadow.medium,
     elevation: 15,
-    backgroundColor: '#000',
     overflow: 'hidden',
   },
   detailCover: {
@@ -293,7 +595,7 @@ const styles = StyleSheet.create({
     ...theme.typography.h3,
     fontStyle: 'italic',
     textAlign: 'center',
-    opacity: 0.8,
+    opacity: 0.85,
   },
   badgesContainer: {
     flexWrap: 'wrap',
@@ -366,6 +668,7 @@ const styles = StyleSheet.create({
   notesBox: {
     padding: theme.spacing.m,
     borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
     borderLeftWidth: 4,
     ...theme.shadow.soft,
   },
@@ -380,7 +683,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: theme.borderRadius.m,
     alignItems: 'center',
-    opacity: 0.6,
   },
   addQuoteText: {
     ...theme.typography.caption,
@@ -411,19 +713,80 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  floatingBackBtn: {
+  stickyHeader: {
     position: 'absolute',
-    top: 50,
-    left: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 64,
+    paddingHorizontal: theme.spacing.m,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    zIndex: 20,
+  },
+  stickyHeaderBg: {
+    borderBottomWidth: 1,
+  },
+  headerActionBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    zIndex: 10,
-  }
+  },
+  stickyTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickyTitle: {
+    ...theme.typography.body,
+    fontWeight: '700',
+    fontFamily: 'serif',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  stickyAuthor: {
+    ...theme.typography.caption,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(13, 11, 20, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.l,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    gap: theme.spacing.m,
+  },
+  previewImage: {
+    width: '100%',
+    height: 480,
+    borderRadius: theme.borderRadius.m,
+  },
+  previewCloseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
+  },
+  previewCloseText: {
+    ...theme.typography.caption,
+    fontWeight: '600',
+  },
 });
