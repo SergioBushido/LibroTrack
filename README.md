@@ -65,9 +65,10 @@ No sustituyen las pruebas en un dispositivo Android/iOS.
 
 ## Copias de seguridad e importación
 
-Desde Estadísticas puedes exportar y restaurar una copia JSON, incluso con una biblioteca vacía.
-La copia contiene los libros; no incluye el tema, el objetivo lector ni las imágenes de portada descargadas.
+Desde Estadísticas puedes exportar y restaurar una copia JSON, incluso con una biblioteca vacía, así como exportar la biblioteca en CSV.
+La copia JSON contiene los libros; no incluye el tema, el objetivo lector ni las imágenes de portada descargadas.
 Las portadas se conservan como URLs. Guarda el archivo mediante el menú de compartir.
+La exportación CSV genera un archivo UTF-8 con BOM compatible con Excel y Google Sheets, ordenado por fecha de fin descendente, con columnas en español, días de lectura calculados y escape RFC 4180 (con protección frente a inyección de fórmulas). Es un formato de solo exportación; para restaurar una biblioteca utiliza siempre la copia JSON.
 Una restauración validada pide confirmación porque reemplaza toda la biblioteca, también si contiene cero libros.
 Si los datos almacenados son inválidos, la aplicación bloquea su lectura y las modificaciones normales para evitar sobrescribirlos.
 

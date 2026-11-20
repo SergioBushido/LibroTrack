@@ -185,6 +185,109 @@ test('restauración inválida o cancelada conserva los datos; una copia vacía r
   assert.equal(confirmations, 2);
 });
 
+test('booksToCsv formatea en RFC 4180 con BOM, orden descendente y protección ante fórmulas', () => {
+  const load = loader({
+    '@react-native-async-storage/async-storage': {},
+    'expo-file-system': {},
+    'expo-sharing': {},
+    'expo-document-picker': {},
+  });
+  const { booksToCsv } = load('src/services/backupService.ts');
+  const emptyCsv = booksToCsv([]);
+  assert.ok(emptyCsv.startsWith('\uFEFF'));
+  assert.equal(emptyCsv, '\uFEFFTítulo,Autor,Género,Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
+
+  const input = [
+    {
+      ...book('antiguo', 2023, 5),
+      title: 'El "antiguo", tomo 1',
+      author: 'Autor, A.',
+      genre: 'Novela',
+      mood: '🔥',
+      notes: 'Línea 1\nLínea 2',
+      quote: '=HYPERLINK("https://example.org")',
+      coverUrl: 'https://example.org/antiguo.jpg',
+    },
+    {
+      ...book('reciente', 2025, 1),
+      title: '-1984',
+      notes: '+resumen',
+      quote: '@nota',
+    },
+  ];
+  const snapshot = JSON.stringify(input);
+  const csv = booksToCsv(input);
+  assert.equal(JSON.stringify(input), snapshot, 'no muta la lista original');
+
+  const lines = csv.slice(1).split('\r\n');
+  assert.equal(lines[0], 'Título,Autor,Género,Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
+  assert.equal(lines[1], "'-1984,,,Bueno,,2025-01-01,2025-01-01,1,'+resumen,'@nota,");
+  assert.equal(
+    lines.slice(2).join('\r\n'),
+    '"El ""antiguo"", tomo 1","Autor, A.",Novela,Bueno,🔥,2023-01-01,2023-01-05,5,"Línea 1\nLínea 2","\'=HYPERLINK(""https://example.org"")",https://example.org/antiguo.jpg',
+  );
+});
+
+test('exportBooksCsv y exportBackup escriben y comparten archivos respetando disponibilidad', async () => {
+  let stored = JSON.stringify([book('uno', 2024, 4)]);
+  let sharingAvailable = true;
+  let dirCreated = false;
+  const written = [];
+  const shared = [];
+
+  class MockDirectory {
+    constructor(base, name) {
+      this.uri = `${base}/${name}`;
+      this.exists = false;
+    }
+    create() {
+      dirCreated = true;
+      this.exists = true;
+    }
+  }
+  class MockFile {
+    constructor(dir, name) {
+      this.uri = `${dir.uri}/${name}`;
+    }
+    async write(content) {
+      written.push({ uri: this.uri, content });
+    }
+  }
+
+  const load = loader({
+    '@react-native-async-storage/async-storage': {
+      getItem: async () => stored,
+      setItem: async (_, value) => { stored = value; },
+    },
+    'expo-file-system': { Directory: MockDirectory, File: MockFile, Paths: { cache: 'file:///cache' } },
+    'expo-sharing': {
+      isAvailableAsync: async () => sharingAvailable,
+      shareAsync: async (uri, options) => { shared.push({ uri, options }); },
+    },
+    'expo-document-picker': {},
+  });
+  const { exportBooksCsv, exportBackup } = load('src/services/backupService.ts');
+
+  const csvUri = await exportBooksCsv();
+  assert.match(csvUri, /^file:\/\/\/cache\/backups\/librotrack-biblioteca-\d{4}-\d{2}-\d{2}\.csv$/);
+  assert.equal(dirCreated, true);
+  assert.equal(written.length, 1);
+  assert.ok(written[0].content.startsWith('\uFEFFTítulo,'));
+  assert.ok(written[0].content.includes('Libro uno'));
+  assert.equal(shared[0].options.mimeType, 'text/csv');
+  assert.equal(shared[0].options.UTI, 'public.comma-separated-values-text');
+
+  const jsonUri = await exportBackup();
+  assert.match(jsonUri, /^file:\/\/\/cache\/backups\/librotrack-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  assert.equal(shared[1].options.mimeType, 'application/json');
+  assert.equal(JSON.parse(written[1].content).totalBooks, 1);
+
+  sharingAvailable = false;
+  await assert.rejects(exportBooksCsv(), /exportación CSV/);
+  await assert.rejects(exportBackup(), /copia de seguridad/);
+  assert.equal(written.length, 2);
+});
+
 test('los récords se calculan por año y también para toda la biblioteca', () => {
   const { calculateStats } = loader()('src/services/statsService.ts');
   const books = [book('rápido-global', 2023, 1), book('lento-global', 2023, 30), book('rápido-año', 2024, 3), book('lento-año', 2024, 9)];

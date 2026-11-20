@@ -48,6 +48,6 @@ LibroTrack es una biblioteca personal de lectura diseñada para gestionar y visu
 La aplicación es funcional y cuenta con su arquitectura base sólida. Se han corregido problemas de dependencias y está conectada a un repositorio en GitHub (`SergioBushido/LibroTrack`).
 
 **Siguiente fase sugerida:**
-- Copias JSON locales implementadas; pendientes sincronización en la nube y exportación CSV.
+- Copias JSON locales y exportación CSV implementadas; pendiente sincronización en la nube.
 - Mejoras en el diseño de la pantalla de detalle (animaciones con Reanimated).
 - Sistema de notificaciones para recordar el reto lector.
