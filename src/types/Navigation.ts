@@ -1,7 +1,7 @@
 import { NavigatorScreenParams, CompositeNavigationProp, RouteProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Book } from './Book';
+import { Book, ReadingStatus } from './Book';
 
 export type BibliotecaStackParamList = {
   BooksList: undefined;
@@ -10,7 +10,7 @@ export type BibliotecaStackParamList = {
 };
 
 export type AddStackParamList = {
-  AddBookForm: { title?: string; author?: string; coverUrl?: string } | undefined;
+  AddBookForm: { title?: string; author?: string; coverUrl?: string; status?: ReadingStatus } | undefined;
   ImportBooks: undefined;
 };
 

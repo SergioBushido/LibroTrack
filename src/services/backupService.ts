@@ -3,7 +3,7 @@ import { getAllBooks, replaceAllBooks } from './bookStorage';
 import { File, Directory, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { Book } from '../types/Book';
+import { Book, READING_STATUS_LABELS, getBookStatus } from '../types/Book';
 import { validateBooks } from '../utils/bookValidation';
 import { calculateReadingDays } from '../utils/dateUtils';
 import { sortBooksByEndDate } from '../utils/filters';
@@ -14,6 +14,8 @@ const CSV_HEADERS = [
   'Título',
   'Autor',
   'Género',
+  'Estado',
+  'Progreso (%)',
   'Valoración',
   'Estado de ánimo',
   'Fecha de inicio',
@@ -40,19 +42,29 @@ export const booksToCsv = (books: Book[]): string => {
   const sorted = sortBooksByEndDate(books, false);
   const rows = [
     CSV_HEADERS.map(escapeCsvCell).join(','),
-    ...sorted.map(book => [
-      book.title,
-      book.author ?? '',
-      book.genre ?? '',
-      book.rating,
-      book.mood ?? '',
-      book.startDate,
-      book.endDate,
-      calculateReadingDays(book.startDate, book.endDate),
-      book.notes ?? '',
-      book.quote ?? '',
-      book.coverUrl ?? '',
-    ].map(escapeCsvCell).join(',')),
+    ...sorted.map(book => {
+      const status = getBookStatus(book);
+      const progressValue = status === 'read'
+        ? 100
+        : status === 'reading'
+          ? Math.round(book.progress ?? 0)
+          : '';
+      return [
+        book.title,
+        book.author ?? '',
+        book.genre ?? '',
+        READING_STATUS_LABELS[status],
+        progressValue,
+        book.rating ?? '',
+        book.mood ?? '',
+        book.startDate ?? '',
+        book.endDate ?? '',
+        book.startDate && book.endDate ? calculateReadingDays(book.startDate, book.endDate) : '',
+        book.notes ?? '',
+        book.quote ?? '',
+        book.coverUrl ?? '',
+      ].map(escapeCsvCell).join(',');
+    }),
   ];
   return `\uFEFF${rows.join('\r\n')}`;
 };

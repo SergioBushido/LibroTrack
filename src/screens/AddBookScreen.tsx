@@ -17,7 +17,7 @@ export const AddBookScreen = () => {
 
   const handleSave = async (values: BookFormValues) => {
     await saveBook(values);
-    navigation.setParams({ title: undefined, author: undefined, coverUrl: undefined });
+    navigation.setParams({ title: undefined, author: undefined, coverUrl: undefined, status: undefined });
     navigation.navigate('Biblioteca', { screen: 'BooksList' });
     notice.success(`«${values.title}» añadido a tu biblioteca`);
   };

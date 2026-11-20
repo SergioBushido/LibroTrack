@@ -1,4 +1,4 @@
-import { Book, BookFilters, Rating } from '../types/Book';
+import { Book, BookFilters, Genre, Rating, getBookStatus } from '../types/Book';
 import { calculateReadingDays, getEndMonth, getEndYear } from './dateUtils';
 import { parseISO, isAfter, isBefore, isSameDay } from 'date-fns';
 
@@ -28,41 +28,49 @@ const RATING_WEIGHT: Record<Rating, number> = {
   'Muy bueno': 4,
 };
 
+export const getAvailableGenres = (books: Book[]): Exclude<Genre, null>[] => {
+  const genres = new Set<Exclude<Genre, null>>();
+  for (const book of books) {
+    if (book.genre) genres.add(book.genre);
+  }
+  return Array.from(genres).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+};
+
 export const filterBooksList = (books: Book[], filters: BookFilters, query: string = ''): Book[] => {
   let result = books;
 
-  // Filtrado por búsqueda de texto
+  if (filters.status) {
+    result = result.filter(book => getBookStatus(book) === filters.status);
+  }
+
   if (query.trim()) {
     const q = query.toLowerCase().trim();
     result = result.filter(book =>
       book.title.toLowerCase().includes(q) ||
       (book.author && book.author.toLowerCase().includes(q)) ||
+      (book.genre && book.genre.toLowerCase().includes(q)) ||
       (book.notes && book.notes.toLowerCase().includes(q)) ||
-      book.rating.toLowerCase().includes(q)
+      (book.quote && book.quote.toLowerCase().includes(q)) ||
+      (book.rating && book.rating.toLowerCase().includes(q))
     );
   }
 
-  // Filtrado por año
   if (filters.year) {
     result = result.filter(book => getEndYear(book.endDate) === filters.year);
   }
 
-  // Filtrado por mes
   if (filters.month) {
     result = result.filter(book => getEndMonth(book.endDate) === filters.month);
   }
 
-  // Filtrado por género
   if (filters.genre) {
     result = result.filter(book => book.genre === filters.genre);
   }
 
-  // Filtrado por valoración
   if (filters.rating) {
     result = result.filter(book => book.rating === filters.rating);
   }
 
-  // Rango de fechas
   if (filters.dateFrom) {
     const fromDate = parseISO(filters.dateFrom);
     result = result.filter(book => {
@@ -82,15 +90,17 @@ export const filterBooksList = (books: Book[], filters: BookFilters, query: stri
   return result;
 };
 
-const safeEndTime = (book: Book): number => {
-  const time = parseISO(book.endDate).getTime();
+const safeReferenceTime = (book: Book): number => {
+  const candidate = book.endDate || book.startDate || book.updatedAt || book.createdAt;
+  if (!candidate) return 0;
+  const time = parseISO(candidate).getTime();
   return Number.isFinite(time) ? time : 0;
 };
 
 export const sortBooksByEndDate = (books: Book[], ascending: boolean = false): Book[] => {
   return [...books].sort((a, b) => {
-    const dateA = safeEndTime(a);
-    const dateB = safeEndTime(b);
+    const dateA = safeReferenceTime(a);
+    const dateB = safeReferenceTime(b);
     return ascending ? dateA - dateB : dateB - dateA;
   });
 };
@@ -98,25 +108,27 @@ export const sortBooksByEndDate = (books: Book[], ascending: boolean = false): B
 export const sortBooks = (books: Book[], sortBy: BookSortOption = 'date_desc'): Book[] => {
   return [...books].sort((a, b) => {
     if (sortBy === 'date_asc') {
-      const diff = safeEndTime(a) - safeEndTime(b);
+      const diff = safeReferenceTime(a) - safeReferenceTime(b);
       return diff !== 0 ? diff : a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
     }
     if (sortBy === 'rating_desc') {
-      const diff = (RATING_WEIGHT[b.rating] ?? 0) - (RATING_WEIGHT[a.rating] ?? 0);
+      const weightA = a.rating ? (RATING_WEIGHT[a.rating] ?? 0) : 0;
+      const weightB = b.rating ? (RATING_WEIGHT[b.rating] ?? 0) : 0;
+      const diff = weightB - weightA;
       if (diff !== 0) return diff;
-      return safeEndTime(b) - safeEndTime(a);
+      return safeReferenceTime(b) - safeReferenceTime(a);
     }
     if (sortBy === 'title_asc') {
       const diff = a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
-      return diff !== 0 ? diff : safeEndTime(b) - safeEndTime(a);
+      return diff !== 0 ? diff : safeReferenceTime(b) - safeReferenceTime(a);
     }
     if (sortBy === 'duration_asc') {
       const daysA = calculateReadingDays(a.startDate, a.endDate) || Number.MAX_SAFE_INTEGER;
       const daysB = calculateReadingDays(b.startDate, b.endDate) || Number.MAX_SAFE_INTEGER;
       if (daysA !== daysB) return daysA - daysB;
-      return safeEndTime(b) - safeEndTime(a);
+      return safeReferenceTime(b) - safeReferenceTime(a);
     }
-    const diff = safeEndTime(b) - safeEndTime(a);
+    const diff = safeReferenceTime(b) - safeReferenceTime(a);
     return diff !== 0 ? diff : a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
   });
 };

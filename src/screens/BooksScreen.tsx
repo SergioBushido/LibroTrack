@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, FlatList, TouchableOpacity, Image, Platform } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Book, Rating } from '../types/Book';
+import { Book, Genre, Rating, ReadingStatus, getBookStatus } from '../types/Book';
 import { BibliotecaNavigationProp } from '../types/Navigation';
 import { getAllBooks, deleteBook, updateBook, initializeBooksOnFirstRun } from '../services/bookStorage';
 import { createInitialLibrary } from '../services/initialLibrary';
@@ -12,6 +12,7 @@ import {
   BOOK_SORT_OPTIONS,
   BookSortOption,
   BookYearSection,
+  getAvailableGenres,
   groupBooksByYear,
   isBookSortOption,
   sortBooks,
@@ -32,6 +33,13 @@ import { HapticService } from '../services/HapticService';
 import { FadeInView } from '../components/FadeInView';
 
 type FilterType = 'Todos' | Rating | string;
+type GenreFilter = 'Todos' | Exclude<Genre, null>;
+
+const STATUS_TABS: { id: ReadingStatus; label: string }[] = [
+  { id: 'read', label: 'Leídos' },
+  { id: 'reading', label: 'Leyendo' },
+  { id: 'wishlist', label: 'Pendientes' },
+];
 
 export const BooksScreen = () => {
   const [books, setBooks] = useState<Book[]>([]);
@@ -40,10 +48,12 @@ export const BooksScreen = () => {
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [activeStatus, setActiveStatus] = useState<ReadingStatus>('read');
   const [activeFilter, setActiveFilter] = useState<FilterType>('Todos');
+  const [activeGenre, setActiveGenre] = useState<GenreFilter>('Todos');
   const [sortBy, setSortBy] = useState<BookSortOption>('date_desc');
-  const filtersRef = useRef({ query, activeFilter, sortBy });
-  filtersRef.current = { query, activeFilter, sortBy };
+  const filtersRef = useRef({ query, activeStatus, activeFilter, activeGenre, sortBy });
+  filtersRef.current = { query, activeStatus, activeFilter, activeGenre, sortBy };
   const isLoadedRef = useRef(false);
   const [streak, setStreak] = useState(0);
   const [updatingCovers, setUpdatingCovers] = useState(false);
@@ -57,19 +67,30 @@ export const BooksScreen = () => {
   const globalStyles = getGlobalStyles(colors);
   const layout = useResponsiveLayout();
 
+  const readBooks = books.filter(book => getBookStatus(book) === 'read');
+  const readingBooks = books.filter(book => getBookStatus(book) === 'reading');
+  const wishlistBooks = books.filter(book => getBookStatus(book) === 'wishlist');
+  const statusCounts: Record<ReadingStatus, number> = {
+    read: readBooks.length,
+    reading: readingBooks.length,
+    wishlist: wishlistBooks.length,
+  };
+  const statusScopedBooks = activeStatus === 'read' ? readBooks : activeStatus === 'reading' ? readingBooks : wishlistBooks;
+  const availableGenres = getAvailableGenres(statusScopedBooks);
+
   const currentYear = new Date().getFullYear().toString();
   const dynamicYears = Array.from(
     new Set([
       currentYear,
-      ...books
+      ...readBooks
         .map(book => book.endDate.split('-')[0])
         .filter(year => /^\d{4}$/.test(year)),
     ]),
   ).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
 
-  const FILTER_OPTIONS: FilterType[] = [
-    'Todos', 'Muy bueno', 'Bueno', 'Regular', 'Malo', ...dynamicYears,
-  ];
+  const FILTER_OPTIONS: FilterType[] = activeStatus === 'read'
+    ? ['Todos', 'Muy bueno', 'Bueno', 'Regular', 'Malo', ...dynamicYears]
+    : ['Todos'];
 
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -93,9 +114,17 @@ export const BooksScreen = () => {
       const stats = calculateStats(allBooks, currentGoal);
       setStreak(stats.readingStreak);
 
-      setLastBook(sortedBooks[0] ?? null);
+      const latestRead = sortedBooks.find(book => getBookStatus(book) === 'read') ?? null;
+      setLastBook(latestRead);
 
-      applyFilters(sortedBooks, filtersRef.current.query, filtersRef.current.activeFilter, effectiveSort);
+      applyFilters(
+        sortedBooks,
+        filtersRef.current.query,
+        filtersRef.current.activeStatus,
+        filtersRef.current.activeFilter,
+        filtersRef.current.activeGenre,
+        effectiveSort,
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Error de lectura desconocido';
       notice.alert('No se puede abrir la biblioteca', `Tus libros guardados no se han modificado. Vuelve a entrar en Biblioteca para intentarlo de nuevo.\n\nDetalle del error: ${detail}`, [{ text: 'Entendido' }], { variant: 'error' });
@@ -114,10 +143,12 @@ export const BooksScreen = () => {
   const applyFilters = (
     sourceBooks: Book[],
     searchQuery: string,
-    filter: FilterType,
+    status: ReadingStatus = filtersRef.current.activeStatus,
+    filter: FilterType = filtersRef.current.activeFilter,
+    genreFilter: GenreFilter = filtersRef.current.activeGenre,
     currentSort: BookSortOption = filtersRef.current.sortBy,
   ) => {
-    let result = sourceBooks;
+    let result = sourceBooks.filter(book => getBookStatus(book) === status);
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -130,12 +161,16 @@ export const BooksScreen = () => {
       );
     }
 
-    if (filter !== 'Todos') {
+    if (status === 'read' && filter !== 'Todos') {
       if (['Muy bueno', 'Bueno', 'Regular', 'Malo'].includes(filter as string)) {
         result = result.filter(book => book.rating === filter);
       } else if (/^\d{4}$/.test(filter as string)) {
         result = result.filter(book => book.endDate.startsWith(filter as string));
       }
+    }
+
+    if (genreFilter !== 'Todos') {
+      result = result.filter(book => book.genre === genreFilter);
     }
 
     setSortedFilteredBooks(sortBooks(result, currentSort));
@@ -144,20 +179,37 @@ export const BooksScreen = () => {
 
   const handleSearch = (text: string) => {
     setQuery(text);
-    applyFilters(books, text, activeFilter, sortBy);
+    applyFilters(books, text, activeStatus, activeFilter, activeGenre, sortBy);
+  };
+
+  const handleStatusPress = (nextStatus: ReadingStatus) => {
+    if (nextStatus === activeStatus) return;
+    HapticService.selection();
+    setActiveStatus(nextStatus);
+    setSelectedYear(null);
+    setActiveFilter('Todos');
+    setActiveGenre('Todos');
+    applyFilters(books, query, nextStatus, 'Todos', 'Todos', sortBy);
   };
 
   const handleFilterPress = (filter: FilterType) => {
     HapticService.selection();
     setActiveFilter(filter);
-    applyFilters(books, query, filter, sortBy);
+    applyFilters(books, query, activeStatus, filter, activeGenre, sortBy);
+  };
+
+  const handleGenrePress = (genre: GenreFilter) => {
+    HapticService.selection();
+    const nextGenre: GenreFilter = activeGenre === genre ? 'Todos' : genre;
+    setActiveGenre(nextGenre);
+    applyFilters(books, query, activeStatus, activeFilter, nextGenre, sortBy);
   };
 
   const handleSortPress = (nextSort: BookSortOption) => {
     if (nextSort === sortBy) return;
     HapticService.selection();
     setSortBy(nextSort);
-    applyFilters(books, query, activeFilter, nextSort);
+    applyFilters(books, query, activeStatus, activeFilter, activeGenre, nextSort);
     AsyncStorage.setItem(STORAGE_KEYS.BOOKS_SORT, nextSort).catch(() => undefined);
   };
 
@@ -243,7 +295,32 @@ export const BooksScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {!selectedYear && lastBook && query === '' && activeFilter === 'Todos' && (
+      <View style={styles.statusTabsRow}>
+        {STATUS_TABS.map(tab => {
+          const isActive = activeStatus === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              onPress={() => handleStatusPress(tab.id)}
+              style={[
+                styles.statusTab,
+                {
+                  backgroundColor: isActive ? colors.accent : colors.cardBg,
+                  borderColor: isActive ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.statusTabText, { color: isActive ? colors.onAccent : colors.ink2 }]}>
+                {`${tab.label} (${statusCounts[tab.id]})`}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {activeStatus === 'read' && !selectedYear && lastBook && query === '' && activeFilter === 'Todos' && activeGenre === 'Todos' && (
         <FadeInView delay={200}>
           <TouchableOpacity
             activeOpacity={0.9}
@@ -258,7 +335,7 @@ export const BooksScreen = () => {
                 <Text style={[styles.heroTitle, { color: '#FFF' }]} numberOfLines={2}>{lastBook.title}</Text>
                 <Text style={[styles.heroAuthor, { color: 'rgba(255,255,255,0.75)' }]}>{lastBook.author}</Text>
                 <View style={styles.heroFooter}>
-                   <RatingBadge rating={lastBook.rating} mini />
+                   {lastBook.rating ? <RatingBadge rating={lastBook.rating} mini /> : null}
                    <View style={styles.heroDots}>
                      <View style={[styles.dot, { backgroundColor: colors.gold }]} />
                      <View style={[styles.dot, { backgroundColor: 'rgba(255,255,255,0.2)' }]} />
@@ -280,7 +357,7 @@ export const BooksScreen = () => {
         </FadeInView>
       )}
 
-      {!selectedYear && (
+      {!selectedYear && activeStatus === 'read' && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsBar}>
           <QuickStat
             label="Este mes"
@@ -290,13 +367,13 @@ export const BooksScreen = () => {
           />
           <QuickStat
             label={`Meta ${currentYear}`}
-            value={`${books.filter(b => b.endDate.startsWith(currentYear)).length}/${goal}`}
+            value={`${readBooks.filter(b => b.endDate.startsWith(currentYear)).length}/${goal}`}
             icon="trophy-outline"
             color={colors.gold}
           />
           <QuickStat
-            label="Total"
-            value={books.length}
+            label="Leídos"
+            value={readBooks.length}
             icon="library-shelves"
             color={colors.accent}
           />
@@ -319,32 +396,69 @@ export const BooksScreen = () => {
         )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-        {FILTER_OPTIONS.map(filter => {
-          const isActive = activeFilter === filter;
-          return (
-            <TouchableOpacity
-              key={filter}
-              activeOpacity={0.7}
-              style={[
-                styles.filterChip,
-                {
-                backgroundColor: isActive ? colors.accent : colors.cardBg,
-                  borderColor: isActive ? colors.accent : colors.border
-                }
-              ]}
-              onPress={() => handleFilterPress(filter)}
-            >
-              <Text style={[
-                styles.filterText,
-                { color: isActive ? colors.onAccent : colors.ink2, fontWeight: isActive ? '700' : '500' }
-              ]}>
-                {filter}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {FILTER_OPTIONS.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
+          {FILTER_OPTIONS.map(filter => {
+            const isActive = activeFilter === filter;
+            return (
+              <TouchableOpacity
+                key={filter}
+                activeOpacity={0.7}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? colors.accent : colors.cardBg,
+                    borderColor: isActive ? colors.accent : colors.border
+                  }
+                ]}
+                onPress={() => handleFilterPress(filter)}
+              >
+                <Text style={[
+                  styles.filterText,
+                  { color: isActive ? colors.onAccent : colors.ink2, fontWeight: isActive ? '700' : '500' }
+                ]}>
+                  {filter}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
+      {availableGenres.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortScroll}>
+          <View style={styles.sortLabelWrap}>
+            <MaterialCommunityIcons name="tag-outline" size={15} color={colors.ink3} />
+            <Text style={[styles.sortPrefix, { color: colors.ink3 }]}>Género:</Text>
+          </View>
+          {(['Todos', ...availableGenres] as GenreFilter[]).map(genre => {
+            const isActive = activeGenre === genre;
+            return (
+              <TouchableOpacity
+                key={genre}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                activeOpacity={0.7}
+                style={[
+                  styles.sortChip,
+                  {
+                    backgroundColor: isActive ? colors.accent2 + '20' : colors.cardBg,
+                    borderColor: isActive ? colors.accent2 : colors.border,
+                  },
+                ]}
+                onPress={() => handleGenrePress(genre)}
+              >
+                <Text style={[
+                  styles.sortText,
+                  { color: isActive ? colors.accent2 : colors.ink2, fontWeight: isActive ? '700' : '500' },
+                ]}>
+                  {genre}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortScroll}>
         <View style={styles.sortLabelWrap}>
@@ -412,12 +526,15 @@ export const BooksScreen = () => {
   };
 
   const selectedSection = selectedYear ? bookSections.find(section => section.title === selectedYear) : null;
-  const hasActiveSearchOrFilter = query.trim().length > 0 || activeFilter !== 'Todos';
-  const showFlatSortedList = !selectedYear && (hasActiveSearchOrFilter || (sortBy !== 'date_desc' && sortBy !== 'date_asc'));
+  const hasActiveSearchOrFilter = query.trim().length > 0 || activeFilter !== 'Todos' || activeGenre !== 'Todos';
+  const showFlatSortedList = activeStatus !== 'read' || (!selectedYear && (hasActiveSearchOrFilter || (sortBy !== 'date_desc' && sortBy !== 'date_asc')));
   const activeSortLabel = BOOK_SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? 'Más recientes';
-  const flatListHeader = hasActiveSearchOrFilter
-    ? `RESULTADOS (${sortedFilteredBooks.length}) · ${activeSortLabel.toUpperCase()}`
-    : `${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`;
+  const statusHeading = activeStatus === 'reading' ? 'LEYENDO AHORA' : activeStatus === 'wishlist' ? 'PENDIENTES' : 'RESULTADOS';
+  const flatListHeader = activeStatus !== 'read'
+    ? `${statusHeading} (${sortedFilteredBooks.length})`
+    : hasActiveSearchOrFilter
+      ? `RESULTADOS (${sortedFilteredBooks.length}) · ${activeSortLabel.toUpperCase()}`
+      : `${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`;
 
   const renderBookItem = useCallback(
     ({ item, index }: { item: Book; index: number }) => (
@@ -698,6 +815,28 @@ const styles = StyleSheet.create({
   filterText: {
     ...theme.typography.caption,
     fontSize: 13,
+  },
+  statusTabsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: theme.spacing.m,
+  },
+  statusTab: {
+    flexGrow: 1,
+    flexBasis: 96,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
+  },
+  statusTabText: {
+    ...theme.typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
   },
   sortScroll: {
     flexDirection: 'row',

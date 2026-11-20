@@ -195,7 +195,7 @@ test('booksToCsv formatea en RFC 4180 con BOM, orden descendente y protección a
   const { booksToCsv } = load('src/services/backupService.ts');
   const emptyCsv = booksToCsv([]);
   assert.ok(emptyCsv.startsWith('\uFEFF'));
-  assert.equal(emptyCsv, '\uFEFFTítulo,Autor,Género,Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
+  assert.equal(emptyCsv, '\uFEFFTítulo,Autor,Género,Estado,Progreso (%),Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
 
   const input = [
     {
@@ -220,11 +220,11 @@ test('booksToCsv formatea en RFC 4180 con BOM, orden descendente y protección a
   assert.equal(JSON.stringify(input), snapshot, 'no muta la lista original');
 
   const lines = csv.slice(1).split('\r\n');
-  assert.equal(lines[0], 'Título,Autor,Género,Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
-  assert.equal(lines[1], "'-1984,,,Bueno,,2025-01-01,2025-01-01,1,'+resumen,'@nota,");
+  assert.equal(lines[0], 'Título,Autor,Género,Estado,Progreso (%),Valoración,Estado de ánimo,Fecha de inicio,Fecha de fin,Días de lectura,Notas,Cita favorita,Portada');
+  assert.equal(lines[1], "'-1984,,,Leído,100,Bueno,,2025-01-01,2025-01-01,1,'+resumen,'@nota,");
   assert.equal(
     lines.slice(2).join('\r\n'),
-    '"El ""antiguo"", tomo 1","Autor, A.",Novela,Bueno,🔥,2023-01-01,2023-01-05,5,"Línea 1\nLínea 2","\'=HYPERLINK(""https://example.org"")",https://example.org/antiguo.jpg',
+    '"El ""antiguo"", tomo 1","Autor, A.",Novela,Leído,100,Bueno,🔥,2023-01-01,2023-01-05,5,"Línea 1\nLínea 2","\'=HYPERLINK(""https://example.org"")",https://example.org/antiguo.jpg',
   );
 });
 
@@ -804,4 +804,68 @@ test('computeBarChartMetrics calcula totales, picos, proporciones y maneja ceros
   assert.equal(active.peakLabel, '2025');
   assert.deepEqual(active.entries.map(item => item.ratio), [0.25, 1, 0.5]);
   assert.deepEqual(active.entries.map(item => item.isPeak), [false, true, false]);
+});
+
+test('estados de lectura (reading/wishlist), filtro por género, compartir y búsqueda por ISBN', async t => {
+  const { validateBooks } = loader()('src/utils/bookValidation.ts');
+  const { calculateStats } = loader()('src/services/statsService.ts');
+  const { getAvailableGenres, filterBooksList } = loader()('src/utils/filters.ts');
+  const { buildBookShareMessage } = loader()('src/utils/bookShare.ts');
+
+  const readingBook = {
+    id: 'r1', title: 'El nombre del viento', author: 'Patrick Rothfuss', genre: 'Novela',
+    status: 'reading', progress: 45, startDate: '2026-05-01', endDate: '',
+    createdAt: '2026-05-01T00:00:00.000Z', updatedAt: '2026-05-01T00:00:00.000Z',
+  };
+  const wishlistBook = {
+    id: 'w1', title: 'Solaris', author: 'Stanislaw Lem', genre: 'Ciencia ficción',
+    status: 'wishlist', startDate: '', endDate: '',
+    createdAt: '2026-05-02T00:00:00.000Z', updatedAt: '2026-05-02T00:00:00.000Z',
+  };
+  const readBook = {
+    ...book('d1', 2026, 6), author: 'Frank Herbert', genre: 'Ciencia ficción',
+    quote: 'El miedo mata la mente.', notes: 'Obra maestra',
+  };
+
+  assert.equal(validateBooks([readBook, readingBook, wishlistBook]).length, 3);
+  assert.throws(() => validateBooks([{ ...readingBook, progress: 150 }]), /entre 0 y 100/);
+  assert.throws(() => validateBooks([{ ...readingBook, status: 'otro' }]), /estado de lectura/);
+
+  const stats = calculateStats([readBook, readingBook, wishlistBook], 10, 2026);
+  assert.equal(stats.totalBooks, 1);
+  assert.equal(stats.readingCount, 1);
+  assert.equal(stats.wishlistCount, 1);
+
+  assert.deepEqual(getAvailableGenres([readBook, readingBook, wishlistBook]), ['Ciencia ficción', 'Novela']);
+  assert.deepEqual(filterBooksList([readBook, readingBook, wishlistBook], { genre: 'Ciencia ficción', status: 'wishlist' }).map(b => b.id), ['w1']);
+
+  const summaryMsg = buildBookShareMessage(readBook, 'summary');
+  assert.match(summaryMsg, /Libro d1 — Frank Herbert/);
+  assert.match(summaryMsg, /El miedo mata la mente/);
+  const quoteMsg = buildBookShareMessage(readBook, 'quote');
+  assert.match(quoteMsg, /«El miedo mata la mente\.»/);
+  assert.match(quoteMsg, /#LibroTrack/);
+
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async url => {
+    calls.push(url);
+    if (url.includes('googleapis.com')) return { ok: true, json: async () => ({ items: [] }) };
+    return {
+      ok: true,
+      json: async () => ({
+        docs: [{ key: '/works/OL1W', title: 'Cien años de soledad', author_name: ['Gabriel García Márquez'], cover_i: 555 }],
+      }),
+    };
+  });
+  const { normalizeIsbn, searchBooksOnGoogle } = loader()('src/services/internetSearchService.ts');
+  assert.equal(normalizeIsbn('ISBN 978-84-9759-220-8'), '9788497592208');
+  assert.equal(normalizeIsbn('0-306-40615-2'), '0306406152');
+  assert.equal(normalizeIsbn('Dune'), null);
+
+  const isbnResults = await searchBooksOnGoogle('978-84-9759-220-8');
+  assert.equal(isbnResults.length, 1);
+  assert.equal(isbnResults[0].title, 'Cien años de soledad');
+  assert.equal(isbnResults[0].isbn, '9788497592208');
+  assert.ok(calls[0].includes('q=isbn:9788497592208'));
+  assert.ok(calls[1].includes('openlibrary.org/search.json?isbn=9788497592208'));
 });

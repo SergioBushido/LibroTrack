@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
-import { Book } from '../types/Book';
+import { Book, getBookStatus } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { RatingBadge } from './RatingBadge';
@@ -22,7 +22,9 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
   const layout = useResponsiveLayout();
-  const days = calculateReadingDays(book.startDate, book.endDate);
+  const status = getBookStatus(book);
+  const progress = Math.max(0, Math.min(100, Math.round(book.progress ?? 0)));
+  const days = book.startDate && book.endDate ? calculateReadingDays(book.startDate, book.endDate) : 0;
   const [imageError, setImageError] = React.useState(false);
 
   const scale = useRef(new Animated.Value(1)).current;
@@ -48,15 +50,15 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
         stiffness: 120,
         delay: cappedDelay,
         useNativeDriver: true,
-      })
+      }),
     ]);
     animation.start();
     return () => animation.stop();
   }, [index, opacity, translateY]);
 
-  const ratingAccentColor = isDark
-    ? theme.ratingColors[book.rating].darkText
-    : theme.ratingColors[book.rating].text;
+  const ratingAccentColor = book.rating
+    ? (isDark ? theme.ratingColors[book.rating].darkText : theme.ratingColors[book.rating].text)
+    : colors.accent;
 
   const handlePressIn = () => {
     Animated.spring(scale, {
@@ -77,17 +79,23 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
     onPress();
   };
 
+  const footerText = status === 'read' && book.endDate
+    ? `Finalizado el ${formatShortDate(book.endDate)}`
+    : status === 'reading' && book.startDate
+      ? `Iniciado el ${formatShortDate(book.startDate)}`
+      : 'En tu lista de pendientes';
+
   return (
-    <Animated.View 
-      style={{ 
+    <Animated.View
+      style={{
         opacity,
         transform: [
           { translateY },
-          { scale }
-        ]
+          { scale },
+        ],
       }}
     >
-      <TouchableOpacity 
+      <TouchableOpacity
         activeOpacity={0.9}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -97,17 +105,17 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
         <View style={[styles.contentRow, layout.compact && { flexDirection: 'column', gap: 16 }]}>
           <View style={styles.imageContainer}>
             {book.coverUrl && !imageError ? (
-              <Image 
-                source={{ uri: book.coverUrl }} 
-                style={styles.coverImage} 
-                resizeMode="cover" 
+              <Image
+                source={{ uri: book.coverUrl }}
+                style={styles.coverImage}
+                resizeMode="cover"
                 onError={() => setImageError(true)}
               />
             ) : (
               <BookPlaceholder title={book.title} author={book.author} height={120} />
             )}
             <View style={[styles.moodBadge, { backgroundColor: colors.cardBg }]}>
-              <Text style={styles.moodText}>{book.mood || '📖'}</Text>
+              <Text style={styles.moodText}>{book.mood || (status === 'wishlist' ? '🔖' : '📖')}</Text>
             </View>
           </View>
 
@@ -116,57 +124,79 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
               <Text style={[styles.title, { color: colors.ink }, layout.compact && { flex: undefined }]} numberOfLines={layout.compact ? undefined : 2}>
                 {book.title}
               </Text>
-              <RatingBadge rating={book.rating} mini />
+              {book.rating ? (
+                <RatingBadge rating={book.rating} mini />
+              ) : status === 'reading' ? (
+                <View style={[styles.statusChip, { backgroundColor: colors.accentSoft }]}>
+                  <Text style={[styles.statusChipText, { color: colors.accent }]}>{`Leyendo · ${progress}%`}</Text>
+                </View>
+              ) : (
+                <View style={[styles.statusChip, { backgroundColor: colors.gold + '22' }]}>
+                  <Text style={[styles.statusChipText, { color: colors.gold }]}>Pendiente</Text>
+                </View>
+              )}
             </View>
-            
+
             <Text style={[styles.author, { color: colors.ink2 }]} numberOfLines={layout.compact ? undefined : 1}>
               {book.author || 'Autor desconocido'}
             </Text>
 
-            <View style={styles.metaRow}>
-              <View style={[styles.badge, { backgroundColor: colors.cream }]}>
-                <MaterialCommunityIcons name="clock-outline" size={12} color={colors.ink3} />
-                <Text style={[styles.badgeText, { color: colors.ink2 }]}>{days}d</Text>
+            {status === 'reading' ? (
+              <View style={styles.progressSection}>
+                <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                  <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.accent }]} />
+                </View>
               </View>
-              {book.genre && (
+            ) : null}
+
+            <View style={styles.metaRow}>
+              {status === 'read' && days > 0 ? (
+                <View style={[styles.badge, { backgroundColor: colors.cream }]}>
+                  <MaterialCommunityIcons name="clock-outline" size={12} color={colors.ink3} />
+                  <Text style={[styles.badgeText, { color: colors.ink2 }]}>{days}d</Text>
+                </View>
+              ) : null}
+              {book.genre ? (
                 <View style={[styles.badge, { backgroundColor: colors.cream }]}>
                   <Text style={[styles.badgeText, { color: colors.ink2 }]}>{book.genre}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </View>
 
-        {book.notes && (
+        {book.notes ? (
           <View style={[styles.notesContainer, { backgroundColor: colors.cream + '50', borderLeftColor: ratingAccentColor }]}>
             <Text style={[styles.notesText, { color: colors.ink2 }]} numberOfLines={2}>
               "{book.notes}"
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
-          <Text style={[styles.dateText, { color: colors.ink3 }]}>
-            Finalizado el {formatShortDate(book.endDate)}
-          </Text>
-          
+          <Text style={[styles.dateText, { color: colors.ink3 }]}>{footerText}</Text>
+
           <View style={styles.actions}>
-            {onEdit && (
-              <TouchableOpacity 
-                onPress={() => { HapticService.light(); onEdit(); }} 
+            {onEdit ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${book.title}`}
+                onPress={() => { HapticService.light(); onEdit(); }}
                 style={styles.actionBtn}
               >
                 <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.ink3} />
               </TouchableOpacity>
-            )}
-            {onDelete && (
-              <TouchableOpacity 
-                onPress={() => { HapticService.error(); onDelete(); }} 
+            ) : null}
+            {onDelete ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Eliminar ${book.title}`}
+                onPress={() => { HapticService.error(); onDelete(); }}
                 style={styles.actionBtn}
               >
                 <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
       </TouchableOpacity>
@@ -198,7 +228,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -8,
     right: -8,
-    backgroundColor: '#FFF',
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -231,6 +260,29 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.borderRadius.round,
+  },
+  statusChipText: {
+    ...theme.typography.small,
+    fontSize: 9,
+    textTransform: 'none',
+    letterSpacing: 0.2,
+  },
+  progressSection: {
+    marginTop: theme.spacing.s,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   metaRow: {
     flexDirection: 'row',
@@ -291,5 +343,5 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  }
+  },
 });

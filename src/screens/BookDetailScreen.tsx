@@ -8,9 +8,11 @@ import {
   Image,
   Modal,
   Platform,
+  Share,
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { format } from 'date-fns';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { BlurView } from 'expo-blur';
@@ -24,7 +26,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { Book } from '../types/Book';
+import { Book, getBookStatus } from '../types/Book';
 import { BibliotecaNavigationProp, BookDetailRouteProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -40,6 +42,7 @@ import {
   computeBookDetailMotion,
   formatReadingDuration,
 } from '../utils/bookDetailMotion';
+import { buildBookShareMessage } from '../utils/bookShare';
 import { deleteBook, getAllBooks, updateBook } from '../services/bookStorage';
 import { HapticService } from '../services/HapticService';
 
@@ -233,9 +236,65 @@ export const BookDetailScreen = () => {
     setEditingQuote(true);
   };
 
+  const handleShare = async (mode: 'summary' | 'quote' = 'summary') => {
+    if (!book) return;
+    HapticService.light();
+    try {
+      await Share.share({
+        title: book.title,
+        message: buildBookShareMessage(book, mode),
+      });
+    } catch {
+      notice.alert('No se pudo compartir', 'Vuelve a intentarlo en unos segundos.', [{ text: 'Entendido' }], { variant: 'error' });
+    }
+  };
+
+  const handleStartReading = async () => {
+    if (!book) return;
+    HapticService.success();
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const updated = await updateBook(book.id, { status: 'reading', startDate: today, progress: 0 });
+      setBook(updated);
+      notice.success(`Empezaste «${book.title}»`);
+    } catch {
+      notice.alert('No se pudo actualizar el estado', 'Vuelve a intentarlo.', [{ text: 'Entendido' }], { variant: 'error' });
+    }
+  };
+
+  const handleAdjustProgress = async (delta: number) => {
+    if (!book) return;
+    HapticService.light();
+    const nextProgress = Math.max(0, Math.min(100, Math.round((book.progress ?? 0) + delta)));
+    try {
+      const updated = await updateBook(book.id, { progress: nextProgress });
+      setBook(updated);
+    } catch {
+      notice.alert('No se pudo actualizar el progreso', 'Vuelve a intentarlo.', [{ text: 'Entendido' }], { variant: 'error' });
+    }
+  };
+
+  const handleFinishReading = () => {
+    if (!book) return;
+    const today = format(new Date(), 'yyyy-MM-dd');
+    HapticService.light();
+    navigation.navigate('EditBook', {
+      book: {
+        ...book,
+        status: 'read',
+        progress: 100,
+        startDate: book.startDate || today,
+        endDate: today,
+        rating: book.rating ?? 'Bueno',
+      },
+    });
+  };
+
   if (!book) return null;
 
-  const days = calculateReadingDays(book.startDate, book.endDate);
+  const status = getBookStatus(book);
+  const readingProgress = Math.max(0, Math.min(100, Math.round(book.progress ?? 0)));
+  const days = book.startDate && book.endDate ? calculateReadingDays(book.startDate, book.endDate) : 0;
   const durationLabel = formatReadingDuration(days);
   const hasCover = Boolean(book.coverUrl && !imageError);
 
@@ -315,39 +374,115 @@ export const BookDetailScreen = () => {
             ) : null}
 
             <View style={styles.badgesContainer}>
-              <RatingBadge rating={book.rating} />
+              {book.rating ? <RatingBadge rating={book.rating} /> : null}
+              {status === 'reading' ? (
+                <View style={[styles.badge, { backgroundColor: colors.accentSoft, borderColor: colors.accent + '40' }]}>
+                  <MaterialCommunityIcons name="book-open-page-variant-outline" size={16} color={colors.accent} />
+                  <Text style={[styles.badgeText, { color: colors.accent }]}>{`Leyendo · ${readingProgress}%`}</Text>
+                </View>
+              ) : null}
+              {status === 'wishlist' ? (
+                <View style={[styles.badge, { backgroundColor: colors.gold + '20', borderColor: colors.gold + '45' }]}>
+                  <MaterialCommunityIcons name="bookmark-outline" size={16} color={colors.gold} />
+                  <Text style={[styles.badgeText, { color: colors.gold }]}>Pendiente</Text>
+                </View>
+              ) : null}
               {book.mood ? (
                 <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                   <Text style={styles.moodEmoji}>{book.mood}</Text>
                 </View>
               ) : null}
-              <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-                <MaterialCommunityIcons name="clock-outline" size={16} color={colors.ink3} />
-                <Text style={[styles.badgeText, { color: colors.ink2 }]}>{durationLabel}</Text>
-              </View>
+              {status === 'read' && days > 0 ? (
+                <View style={[styles.badge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                  <MaterialCommunityIcons name="clock-outline" size={16} color={colors.ink3} />
+                  <Text style={[styles.badgeText, { color: colors.ink2 }]}>{durationLabel}</Text>
+                </View>
+              ) : null}
             </View>
           </Animated.View>
 
-          <Animated.View
-            entering={sectionEntering(220)}
-            style={[styles.datesGrid, layout.rowStyle, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
-          >
-            <View style={[styles.dateCol, layout.columnStyle]}>
-              <Text style={[styles.dateLabel, { color: colors.ink3 }]}>INICIADO</Text>
-              <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.startDate)}</Text>
-            </View>
-            <View
-              style={[
-                styles.dateDivider,
-                layout.compact && { width: '100%', height: 1 },
-                { backgroundColor: colors.border },
-              ]}
-            />
-            <View style={[styles.dateCol, layout.columnStyle]}>
-              <Text style={[styles.dateLabel, { color: colors.ink3 }]}>FINALIZADO</Text>
-              <Text style={[styles.dateValue, { color: colors.ink }]}>{formatShortDate(book.endDate)}</Text>
-            </View>
-          </Animated.View>
+          {status === 'reading' ? (
+            <Animated.View
+              entering={sectionEntering(200)}
+              style={[styles.progressCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
+              <View style={styles.progressHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.ink }]}>PROGRESO ACTUAL</Text>
+                <Text style={[styles.progressPct, { color: colors.accent }]}>{readingProgress}%</Text>
+              </View>
+              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                <View style={[styles.progressFill, { width: `${readingProgress}%`, backgroundColor: colors.accent }]} />
+              </View>
+              <View style={styles.progressActions}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Restar 10 por ciento de progreso"
+                  onPress={() => handleAdjustProgress(-10)}
+                  style={[styles.progressStepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Text style={[styles.progressStepText, { color: colors.ink }]}>-10%</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Sumar 10 por ciento de progreso"
+                  onPress={() => handleAdjustProgress(10)}
+                  style={[styles.progressStepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Text style={[styles.progressStepText, { color: colors.ink }]}>+10%</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={handleFinishReading}
+                  style={[styles.finishBtn, { backgroundColor: colors.accent }]}
+                >
+                  <MaterialCommunityIcons name="check" size={16} color={colors.onAccent} />
+                  <Text style={[styles.finishBtnText, { color: colors.onAccent }]}>Terminar libro</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {status === 'wishlist' ? (
+            <Animated.View
+              entering={sectionEntering(200)}
+              style={[styles.progressCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
+              <Text style={[styles.wishlistHint, { color: colors.ink2 }]}>
+                Este libro está en tu lista de pendientes. Cuando lo abras, puedes pasarlo a «Leyendo ahora».
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={handleStartReading}
+                style={[styles.finishBtn, { backgroundColor: colors.accent, alignSelf: 'stretch' }]}
+              >
+                <MaterialCommunityIcons name="book-open-variant" size={18} color={colors.onAccent} />
+                <Text style={[styles.finishBtnText, { color: colors.onAccent }]}>Empezar a leer</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : null}
+
+          {(book.startDate || book.endDate) ? (
+            <Animated.View
+              entering={sectionEntering(220)}
+              style={[styles.datesGrid, layout.rowStyle, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
+              <View style={[styles.dateCol, layout.columnStyle]}>
+                <Text style={[styles.dateLabel, { color: colors.ink3 }]}>INICIADO</Text>
+                <Text style={[styles.dateValue, { color: colors.ink }]}>{book.startDate ? formatShortDate(book.startDate) : '—'}</Text>
+              </View>
+              <View
+                style={[
+                  styles.dateDivider,
+                  layout.compact && { width: '100%', height: 1 },
+                  { backgroundColor: colors.border },
+                ]}
+              />
+              <View style={[styles.dateCol, layout.columnStyle]}>
+                <Text style={[styles.dateLabel, { color: colors.ink3 }]}>FINALIZADO</Text>
+                <Text style={[styles.dateValue, { color: colors.ink }]}>{book.endDate ? formatShortDate(book.endDate) : 'En curso'}</Text>
+              </View>
+            </Animated.View>
+          ) : null}
 
           {book.notes ? (
             <Animated.View entering={sectionEntering(290)} style={styles.section}>
@@ -366,14 +501,26 @@ export const BookDetailScreen = () => {
           <Animated.View entering={sectionEntering(350)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.ink }]}>Cita favorita</Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={book.quote ? 'Editar cita favorita' : 'Añadir cita favorita'}
-                hitSlop={10}
-                onPress={handleEditQuote}
-              >
-                <MaterialCommunityIcons name={book.quote ? 'pencil' : 'plus'} size={20} color={colors.accent2} />
-              </TouchableOpacity>
+              <View style={styles.sectionHeaderActions}>
+                {book.quote ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Compartir cita favorita"
+                    hitSlop={10}
+                    onPress={() => handleShare('quote')}
+                  >
+                    <MaterialCommunityIcons name="share-variant-outline" size={20} color={colors.accent} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={book.quote ? 'Editar cita favorita' : 'Añadir cita favorita'}
+                  hitSlop={10}
+                  onPress={handleEditQuote}
+                >
+                  <MaterialCommunityIcons name={book.quote ? 'pencil' : 'plus'} size={20} color={colors.accent2} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {book.quote ? (
@@ -457,14 +604,24 @@ export const BookDetailScreen = () => {
           ) : null}
         </Animated.View>
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Editar libro"
-          style={[styles.headerActionBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
-          onPress={handleEditBook}
-        >
-          <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.ink} />
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Compartir resumen del libro"
+            style={[styles.headerActionBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
+            onPress={() => handleShare('summary')}
+          >
+            <MaterialCommunityIcons name="share-variant-outline" size={20} color={colors.ink} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Editar libro"
+            style={[styles.headerActionBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
+            onPress={handleEditBook}
+          >
+            <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.ink} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {editingQuote ? (
@@ -660,6 +817,76 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing.m,
+  },
+  sectionHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressCard: {
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.l,
+    padding: theme.spacing.m,
+    marginBottom: theme.spacing.xl,
+    gap: theme.spacing.s,
+    ...theme.shadow.soft,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressPct: {
+    ...theme.typography.h3,
+    fontWeight: '800',
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  progressActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  progressStepBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
+  },
+  progressStepText: {
+    ...theme.typography.caption,
+    fontWeight: '700',
+  },
+  finishBtn: {
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.m,
+  },
+  finishBtnText: {
+    ...theme.typography.caption,
+    fontWeight: '700',
+  },
+  wishlistHint: {
+    ...theme.typography.caption,
   },
   sectionTitle: {
     ...theme.typography.small,

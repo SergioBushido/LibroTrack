@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { getBookStatus } from '../types/Book';
 import { BibliotecaNavigationProp, EditBookRouteProp } from '../types/Navigation';
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +32,8 @@ export const EditBookScreen = () => {
         title: book.title,
         author: book.author || '',
         genre: book.genre ?? null,
+        status: getBookStatus(book),
+        progress: book.progress ?? 0,
         startDate: book.startDate,
         endDate: book.endDate,
         rating: book.rating,

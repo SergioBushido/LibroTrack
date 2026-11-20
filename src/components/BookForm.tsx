@@ -9,8 +9,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { format } from 'date-fns';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Genre, Mood, Rating } from '../types/Book';
+import { Genre, Mood, Rating, ReadingStatus } from '../types/Book';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useNotice } from '../context/NoticeContext';
@@ -21,16 +22,29 @@ import { MoodSelector } from './MoodSelector';
 import { BookPlaceholder } from './BookPlaceholder';
 import { BookCover, searchBookCovers } from '../services/bookCoverService';
 import { validateDates } from '../utils/dateUtils';
+import { HapticService } from '../services/HapticService';
 
 const RATINGS: Rating[] = ['Malo', 'Regular', 'Bueno', 'Muy bueno'];
+const STATUS_OPTIONS: {
+  id: ReadingStatus;
+  label: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+}[] = [
+  { id: 'read', label: 'Leído', icon: 'check-circle-outline' },
+  { id: 'reading', label: 'Leyendo', icon: 'book-open-page-variant-outline' },
+  { id: 'wishlist', label: 'Pendiente', icon: 'bookmark-outline' },
+];
+const PROGRESS_PRESETS = [0, 25, 50, 75];
 
 export interface BookFormValues {
   title: string;
   author: string;
   genre: Genre | null;
+  status: ReadingStatus;
+  progress?: number;
   startDate: string;
   endDate: string;
-  rating: Rating;
+  rating?: Rating;
   mood: Mood;
   notes: string;
   quote: string;
@@ -41,6 +55,7 @@ export interface BookFormExternalSeed {
   title?: string;
   author?: string;
   coverUrl?: string;
+  status?: ReadingStatus;
 }
 
 interface BookFormProps {
@@ -52,6 +67,8 @@ interface BookFormProps {
   header?: React.ReactNode;
   onSubmit: (values: BookFormValues) => Promise<void>;
 }
+
+const getTodayIso = () => format(new Date(), 'yyyy-MM-dd');
 
 export const BookForm: React.FC<BookFormProps> = ({
   mode,
@@ -76,6 +93,8 @@ export const BookForm: React.FC<BookFormProps> = ({
   const hasEditedQuery = useRef(mode === 'create');
 
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<ReadingStatus>(initialValues?.status ?? 'read');
+  const [progress, setProgress] = useState<number>(initialValues?.progress ?? 0);
   const [title, setTitle] = useState(initialValues?.title || '');
   const [author, setAuthor] = useState(initialValues?.author || '');
   const [genre, setGenre] = useState<Genre | null>(initialValues?.genre ?? null);
@@ -116,6 +135,12 @@ export const BookForm: React.FC<BookFormProps> = ({
     resetCoverState();
     setTitle(externalSeed.title);
     setAuthor(externalSeed.author || '');
+    if (externalSeed.status) {
+      setStatus(externalSeed.status);
+      if (externalSeed.status === 'reading' && !startDate) {
+        setStartDate(getTodayIso());
+      }
+    }
     if (externalSeed.coverUrl) {
       suppliedCover.current = true;
       manualCoverChoice.current = true;
@@ -123,15 +148,37 @@ export const BookForm: React.FC<BookFormProps> = ({
     }
   }, [mode, externalSeed]);
 
+  const handleStatusChange = (nextStatus: ReadingStatus) => {
+    if (nextStatus === status) return;
+    HapticService.selection();
+    setStatus(nextStatus);
+    setErrors({});
+    if (nextStatus === 'reading') {
+      if (!startDate) setStartDate(getTodayIso());
+      setEndDate('');
+    } else if (nextStatus === 'read') {
+      if (!startDate) setStartDate(getTodayIso());
+      if (!endDate) setEndDate(getTodayIso());
+      setProgress(100);
+    } else if (nextStatus === 'wishlist') {
+      setProgress(0);
+    }
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!title.trim()) newErrors.title = 'El título es obligatorio';
-    if (!startDate) newErrors.startDate = 'La fecha de inicio es obligatoria';
-    if (!endDate) newErrors.endDate = 'La fecha de fin es obligatoria';
-    if (startDate && endDate && !validateDates(startDate, endDate)) {
-      newErrors.endDate = 'La fecha de fin debe ser igual o posterior a la de inicio';
+
+    if (status === 'read') {
+      if (!startDate) newErrors.startDate = 'La fecha de inicio es obligatoria';
+      if (!endDate) newErrors.endDate = 'La fecha de fin es obligatoria';
+      if (startDate && endDate && !validateDates(startDate, endDate)) {
+        newErrors.endDate = 'La fecha de fin debe ser igual o posterior a la de inicio';
+      }
+      if (!rating) newErrors.rating = 'Selecciona una valoración';
+    } else if (status === 'reading') {
+      if (!startDate) newErrors.startDate = 'Indica cuándo empezaste a leerlo';
     }
-    if (!rating) newErrors.rating = 'Selecciona una valoración';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -193,6 +240,8 @@ export const BookForm: React.FC<BookFormProps> = ({
   };
 
   const resetForm = () => {
+    setStatus('read');
+    setProgress(0);
     setTitle('');
     resetCoverState();
     setAuthor('');
@@ -209,11 +258,12 @@ export const BookForm: React.FC<BookFormProps> = ({
   const handleSubmit = async () => {
     if (savingRef.current) return;
     if (!validate()) {
-      notice.alert(
-        'Revisa los campos marcados',
-        'Completa el título, las fechas y la valoración. La fecha de fin debe ser igual o posterior a la de inicio.',
-        [{ text: 'Revisar' }],
-      );
+      const validationHint = status === 'read'
+        ? 'Completa el título, las fechas y la valoración. La fecha de fin debe ser igual o posterior a la de inicio.'
+        : status === 'reading'
+          ? 'Completa el título y la fecha de inicio para guardar tu lectura actual.'
+          : 'Escribe al menos el título del libro para añadirlo a pendientes.';
+      notice.alert('Revisa los campos marcados', validationHint, [{ text: 'Revisar' }]);
       return;
     }
 
@@ -227,9 +277,11 @@ export const BookForm: React.FC<BookFormProps> = ({
         title: title.trim(),
         author: author.trim(),
         genre,
-        startDate,
-        endDate,
-        rating: rating!,
+        status,
+        progress: status === 'reading' ? progress : status === 'read' ? 100 : undefined,
+        startDate: status === 'wishlist' ? '' : startDate,
+        endDate: status === 'read' ? endDate : '',
+        rating: rating ?? undefined,
         mood,
         notes: notes.trim(),
         quote: quote.trim(),
@@ -270,6 +322,11 @@ export const BookForm: React.FC<BookFormProps> = ({
     setAuthor(value);
   };
 
+  const shiftProgress = (delta: number) => {
+    HapticService.light();
+    setProgress(prev => Math.max(0, Math.min(100, prev + delta)));
+  };
+
   return (
     <ScrollView
       style={globalStyles.container}
@@ -278,6 +335,40 @@ export const BookForm: React.FC<BookFormProps> = ({
       keyboardDismissMode="on-drag"
     >
       {header}
+
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: colors.ink }]}>Estado de lectura</Text>
+        <View style={styles.statusRow}>
+          {STATUS_OPTIONS.map(option => {
+            const active = status === option.id;
+            return (
+              <TouchableOpacity
+                key={option.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                disabled={saving}
+                onPress={() => handleStatusChange(option.id)}
+                style={[
+                  styles.statusBtn,
+                  {
+                    backgroundColor: active ? colors.accent : colors.cardBg,
+                    borderColor: active ? colors.accent : colors.border,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={option.icon}
+                  size={16}
+                  color={active ? colors.onAccent : colors.ink2}
+                />
+                <Text style={[styles.statusBtnText, { color: active ? colors.onAccent : colors.ink }]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
@@ -412,74 +503,132 @@ export const BookForm: React.FC<BookFormProps> = ({
         <GenreSelector value={genre} onChange={setGenre} />
       </View>
 
-      <View style={layout.rowStyle}>
-        <View style={[styles.field, layout.columnStyle]}>
-          <DateField
-            label="Fecha inicio *"
-            value={startDate}
-            maxDate={endDate || undefined}
-            disabled={saving}
-            error={errors.startDate}
-            onChange={date => {
-              setStartDate(date);
-              setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
-            }}
-          />
-        </View>
-
-        <View style={[styles.field, layout.columnStyle]}>
-          <DateField
-            label="Fecha fin *"
-            value={endDate}
-            minDate={startDate || undefined}
-            disabled={saving}
-            error={errors.endDate}
-            onChange={date => {
-              setEndDate(date);
-              setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
-            }}
-          />
-        </View>
-      </View>
-
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: colors.ink }]}>Valoración *</Text>
-        <View style={styles.ratingGrid}>
-          {RATINGS.map(r => {
-            const config = theme.ratingColors[r];
-            const isSelected = rating === r;
-            const bg = isDark ? config.darkBg : config.bg;
-            const textColor = isDark ? config.darkText : config.text;
-
-            return (
+      {status === 'reading' ? (
+        <View style={[styles.progressBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <View style={styles.progressHeader}>
+            <Text style={[styles.label, { color: colors.ink, marginBottom: 0 }]}>Progreso de lectura</Text>
+            <Text style={[styles.progressPct, { color: colors.accent }]}>{progress}%</Text>
+          </View>
+          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+            <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.accent }]} />
+          </View>
+          <View style={styles.progressControls}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Restar 5 por ciento"
+              onPress={() => shiftProgress(-5)}
+              style={[styles.stepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.stepBtnText, { color: colors.ink }]}>-5%</Text>
+            </TouchableOpacity>
+            {PROGRESS_PRESETS.map(preset => (
               <TouchableOpacity
-                key={r}
-                disabled={saving}
+                key={preset}
+                accessibilityRole="button"
+                onPress={() => { HapticService.selection(); setProgress(preset); }}
                 style={[
-                  styles.ratingBtn,
-                  layout.compact && { width: '100%' },
+                  styles.presetBtn,
                   {
-                    backgroundColor: isSelected ? bg : colors.cardBg,
-                    borderColor: isSelected ? textColor : colors.border,
+                    backgroundColor: progress === preset ? colors.accentSoft : colors.surface,
+                    borderColor: progress === preset ? colors.accent : colors.border,
                   },
                 ]}
-                onPress={() => {
-                  setRating(r);
-                  if (errors.rating) setErrors(previous => ({ ...previous, rating: '' }));
-                }}
               >
-                <Text style={[styles.ratingText, { color: isSelected ? textColor : colors.ink }]}>{r}</Text>
+                <Text style={[styles.presetText, { color: progress === preset ? colors.accent : colors.ink2 }]}>
+                  {preset}%
+                </Text>
               </TouchableOpacity>
-            );
-          })}
+            ))}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Sumar 5 por ciento"
+              onPress={() => shiftProgress(5)}
+              style={[styles.stepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.stepBtnText, { color: colors.ink }]}>+5%</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        {errors.rating && <Text style={[styles.errorText, { color: colors.error }]}>{errors.rating}</Text>}
-      </View>
+      ) : null}
 
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: colors.ink }]}>Estado de ánimo</Text>
-        <MoodSelector value={mood} onChange={setMood} />
-      </View>
+      {status !== 'wishlist' ? (
+        <View style={layout.rowStyle}>
+          <View style={[styles.field, layout.columnStyle]}>
+            <DateField
+              label="Fecha inicio *"
+              value={startDate}
+              maxDate={status === 'read' && endDate ? endDate : undefined}
+              disabled={saving}
+              error={errors.startDate}
+              onChange={date => {
+                setStartDate(date);
+                setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
+              }}
+            />
+          </View>
+
+          {status === 'read' ? (
+            <View style={[styles.field, layout.columnStyle]}>
+              <DateField
+                label="Fecha fin *"
+                value={endDate}
+                minDate={startDate || undefined}
+                disabled={saving}
+                error={errors.endDate}
+                onChange={date => {
+                  setEndDate(date);
+                  setErrors(previous => ({ ...previous, startDate: '', endDate: '' }));
+                }}
+              />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {status !== 'wishlist' ? (
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.ink }]}>
+            {status === 'read' ? 'Valoración *' : 'Valoración (opcional)'}
+          </Text>
+          <View style={styles.ratingGrid}>
+            {RATINGS.map(r => {
+              const config = theme.ratingColors[r];
+              const isSelected = rating === r;
+              const bg = isDark ? config.darkBg : config.bg;
+              const textColor = isDark ? config.darkText : config.text;
+
+              return (
+                <TouchableOpacity
+                  key={r}
+                  disabled={saving}
+                  style={[
+                    styles.ratingBtn,
+                    layout.compact && { width: '100%' },
+                    {
+                      backgroundColor: isSelected ? bg : colors.cardBg,
+                      borderColor: isSelected ? textColor : colors.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setRating(status === 'reading' && isSelected ? null : r);
+                    if (errors.rating) setErrors(previous => ({ ...previous, rating: '' }));
+                  }}
+                >
+                  <Text style={[styles.ratingText, { color: isSelected ? textColor : colors.ink }]}>{r}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {errors.rating && <Text style={[styles.errorText, { color: colors.error }]}>{errors.rating}</Text>}
+        </View>
+      ) : null}
+
+      {status !== 'wishlist' ? (
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.ink }]}>Estado de ánimo</Text>
+          <MoodSelector value={mood} onChange={setMood} />
+        </View>
+      ) : null}
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Notas personales</Text>
@@ -495,26 +644,28 @@ export const BookForm: React.FC<BookFormProps> = ({
           multiline
           numberOfLines={4}
           placeholderTextColor={colors.ink3}
-          placeholder="¿Qué te pareció el libro?"
+          placeholder={status === 'wishlist' ? '¿Por qué quieres leer este libro?' : '¿Qué te pareció el libro?'}
         />
       </View>
 
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: colors.ink }]}>Cita favorita</Text>
-        <TextInput
-          style={[
-            styles.input,
-            styles.textArea,
-            { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink },
-          ]}
-          value={quote}
-          onChangeText={setQuote}
-          editable={!saving}
-          multiline
-          placeholderTextColor={colors.ink3}
-          placeholder="Esa frase que no quieres olvidar..."
-        />
-      </View>
+      {status !== 'wishlist' ? (
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.ink }]}>Cita favorita</Text>
+          <TextInput
+            style={[
+              styles.input,
+              styles.textArea,
+              { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink },
+            ]}
+            value={quote}
+            onChangeText={setQuote}
+            editable={!saving}
+            multiline
+            placeholderTextColor={colors.ink3}
+            placeholder="Esa frase que no quieres olvidar..."
+          />
+        </View>
+      ) : null}
 
       <TouchableOpacity
         accessibilityRole="button"
@@ -540,6 +691,81 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: theme.spacing.m,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.s,
+  },
+  statusBtn: {
+    flexGrow: 1,
+    flexBasis: 96,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: theme.spacing.s,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.m,
+    borderWidth: 1,
+  },
+  statusBtnText: {
+    ...theme.typography.caption,
+    fontWeight: '700',
+  },
+  progressBox: {
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.l,
+    padding: theme.spacing.m,
+    marginBottom: theme.spacing.m,
+    gap: theme.spacing.s,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressPct: {
+    ...theme.typography.h3,
+    fontWeight: '800',
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressControls: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  stepBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.s,
+    borderWidth: 1,
+  },
+  stepBtnText: {
+    ...theme.typography.caption,
+    fontWeight: '700',
+  },
+  presetBtn: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: theme.borderRadius.s,
+    borderWidth: 1,
+  },
+  presetText: {
+    ...theme.typography.caption,
+    fontWeight: '600',
   },
   label: {
     ...theme.typography.caption,

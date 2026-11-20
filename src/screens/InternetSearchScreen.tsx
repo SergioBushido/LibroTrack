@@ -7,7 +7,8 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { RootTabNavigationProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { searchBooksOnGoogle, SearchResult } from '../services/internetSearchService';
+import { ReadingStatus } from '../types/Book';
+import { normalizeIsbn, searchBooksOnGoogle, SearchResult } from '../services/internetSearchService';
 import { HapticService } from '../services/HapticService';
 import { FadeInView } from '../components/FadeInView';
 
@@ -91,11 +92,13 @@ export const InternetSearchScreen = () => {
     if (url) Linking.openURL(url);
   };
 
-  const handleAddToLibrary = (book: SearchResult) => {
+  const detectedIsbn = normalizeIsbn(query);
+
+  const handleAddToLibrary = (book: SearchResult, status: ReadingStatus = 'read') => {
     HapticService.success();
     navigation.navigate('Añadir', {
       screen: 'AddBookForm',
-      params: { title: book.title, author: book.author, coverUrl: book.coverUrl }
+      params: { title: book.title, author: book.author, coverUrl: book.coverUrl, status }
     });
   };
 
@@ -122,7 +125,7 @@ export const InternetSearchScreen = () => {
         <MaterialCommunityIcons name="magnify" size={22} color={colors.ink3} />
         <TextInput
           style={[styles.searchInput, { color: colors.ink }]}
-          placeholder="Escribe el título o autor..."
+          placeholder="Título, autor o ISBN (ej: 9788497592208)..."
           value={query}
           onChangeText={setQuery}
           placeholderTextColor={colors.ink3}
@@ -135,6 +138,15 @@ export const InternetSearchScreen = () => {
           </TouchableOpacity>
         )}
       </FadeInView>
+
+      {detectedIsbn ? (
+        <View style={[styles.isbnPill, { backgroundColor: colors.accentSoft, borderColor: colors.accent + '40' }]}>
+          <MaterialCommunityIcons name="barcode-scan" size={16} color={colors.accent} />
+          <Text style={[styles.isbnPillText, { color: colors.accent }]}>
+            {`Búsqueda directa por ISBN: ${detectedIsbn}`}
+          </Text>
+        </View>
+      ) : null}
 
       {isLoading && (
         <View style={styles.loaderContainer}>
@@ -185,13 +197,24 @@ export const InternetSearchScreen = () => {
               <View style={[styles.resultInfo, layout.compact && { marginLeft: 0, flex: undefined }]}>
                 <Text style={[styles.resultTitle, { color: colors.ink }]} numberOfLines={layout.compact ? undefined : 2}>{book.title}</Text>
                 <Text style={[styles.resultAuthor, { color: colors.ink3 }]} numberOfLines={layout.compact ? undefined : 1}>{book.author}</Text>
-                <TouchableOpacity
-                  style={[styles.addBtn, { backgroundColor: colors.accent }]}
-                  onPress={() => handleAddToLibrary(book)}
-                >
-                  <MaterialCommunityIcons name="plus" size={16} color={colors.onAccent} />
-                  <Text style={[styles.addBtnText, { color: colors.onAccent }]}>Añadir</Text>
-                </TouchableOpacity>
+                <View style={styles.resultActions}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    style={[styles.addBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => handleAddToLibrary(book, 'read')}
+                  >
+                    <MaterialCommunityIcons name="plus" size={16} color={colors.onAccent} />
+                    <Text style={[styles.addBtnText, { color: colors.onAccent }]}>Añadir</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    style={[styles.wishlistBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => handleAddToLibrary(book, 'wishlist')}
+                  >
+                    <MaterialCommunityIcons name="bookmark-plus-outline" size={15} color={colors.ink} />
+                    <Text style={[styles.wishlistBtnText, { color: colors.ink }]}>Pendiente</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </FadeInView>
           ))}
@@ -326,6 +349,41 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 12,
     fontWeight: '800',
+  },
+  resultActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  wishlistBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
+    gap: 4,
+  },
+  wishlistBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  isbnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
+    marginTop: -theme.spacing.m,
+    marginBottom: theme.spacing.m,
+  },
+  isbnPillText: {
+    ...theme.typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
   },
   enginesSection: {
     marginTop: theme.spacing.s,

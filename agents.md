@@ -77,7 +77,7 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] Añadir lint/análisis estático automatizado (`npm run lint`) en CI (`.github/workflows/ci.yml`).
 
 ### Fase 3: Nuevas funcionalidades
-- [ ] Estados de lectura (*Leyendo ahora* con progreso, *Pendientes / Wishlist* y *Leídos*).
-- [ ] Filtro por género en Biblioteca.
-- [ ] Compartir tarjeta/resumen de lectura o cita favorita desde `BookDetailScreen`.
-- [ ] Búsqueda directa por ISBN en *Descubrir*.
+- [x] Estados de lectura (*Leyendo ahora* con progreso, *Pendientes / Wishlist* y *Leídos*).
+- [x] Filtro por género en Biblioteca.
+- [x] Compartir tarjeta/resumen de lectura o cita favorita desde `BookDetailScreen`.
+- [x] Búsqueda directa por ISBN en *Descubrir* (Google Books + respaldo Open Library).

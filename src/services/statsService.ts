@@ -1,9 +1,11 @@
-import { Book, Rating } from '../types/Book';
+import { Book, Rating, getBookStatus } from '../types/Book';
 import { calculateReadingDays, getEndMonth, getEndYear } from '../utils/dateUtils';
 import { DEFAULT_READING_GOAL } from '../constants/storageKeys';
 
 export interface Stats {
   totalBooks: number;
+  readingCount: number;
+  wishlistCount: number;
   booksThisYear: number;
   booksThisMonth: number;
   avgDaysPerBook: number;
@@ -31,8 +33,21 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
   const currentMonth = now.getMonth() + 1; // 1-12
   const safeGoal = Number.isFinite(retaGoal) && retaGoal > 0 ? Math.trunc(retaGoal) : DEFAULT_READING_GOAL;
 
+  const readBooks: Book[] = [];
+  let readingCount = 0;
+  let wishlistCount = 0;
+
+  for (const book of books) {
+    const status = getBookStatus(book);
+    if (status === 'read') readBooks.push(book);
+    else if (status === 'reading') readingCount++;
+    else wishlistCount++;
+  }
+
   const stats: Stats = {
-    totalBooks: books.length,
+    totalBooks: readBooks.length,
+    readingCount,
+    wishlistCount,
     booksThisYear: 0,
     booksThisMonth: 0,
     avgDaysPerBook: 0,
@@ -53,14 +68,14 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
     readingStreak: 0,
   };
 
-  if (books.length === 0) return stats;
+  if (readBooks.length === 0) return stats;
 
   let scopedDaysTotal = 0;
   let scopedDaysCount = 0;
   let fastestDays = Infinity;
   let slowestDays = -1;
 
-  books.forEach(book => {
+  readBooks.forEach(book => {
     const endYear = getEndYear(book.endDate);
     const endMonth = getEndMonth(book.endDate); // 1-12
 
