@@ -5,7 +5,7 @@ import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 interface Props {
-  icon: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   title: string;
   subtitle: string;
 }
@@ -15,7 +15,7 @@ export const EmptyState: React.FC<Props> = ({ icon, title, subtitle }) => {
 
   return (
     <View style={styles.container}>
-      <MaterialCommunityIcons name={icon as any} size={64} color={colors.ink3} />
+      <MaterialCommunityIcons name={icon} size={64} color={colors.ink3} />
       <Text style={[styles.title, { color: colors.ink }]}>{title}</Text>
       <Text style={[styles.subtitle, { color: colors.ink3 }]}>{subtitle}</Text>
     </View>

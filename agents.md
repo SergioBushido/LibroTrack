@@ -53,3 +53,4 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] Mejoras y animaciones con Reanimated en la pantalla de detalle (parallax, cabecera fija, movimiento reducido y vista previa de portada).
 - [x] Sistema de notificaciones locales para recordar el reto lector (frecuencia diaria/semanal, hora configurable, sincronización con progreso y aviso de prueba).
 - [x] Sincronización en la nube para copias de seguridad (GitHub Gist privado con token cifrado en `expo-secure-store`, auto-descubrimiento y restauración validada).
+- [x] Mejoras técnicas: `ErrorBoundary` global, ordenación personalizable de biblioteca persistida y tipado estricto de navegación/servicios sin `any`.

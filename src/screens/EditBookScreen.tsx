@@ -3,8 +3,8 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { Book, Genre, Mood, Rating } from '../types/Book';
+import { BibliotecaNavigationProp, EditBookRouteProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { DateField } from '../components/DateField';
@@ -18,8 +18,8 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 const RATINGS: Rating[] = ['Malo', 'Regular', 'Bueno', 'Muy bueno'];
 
 export const EditBookScreen = () => {
-  const route = useRoute<any>();
-  const navigation = useNavigation<StackNavigationProp<any>>();
+  const route = useRoute<EditBookRouteProp>();
+  const navigation = useNavigation<BibliotecaNavigationProp>();
   const book: Book = route.params?.book;
   const notice = useNotice();
   const { colors, isDark } = useTheme();

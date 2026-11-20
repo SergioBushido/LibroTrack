@@ -3,12 +3,20 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Book, Rating } from '../types/Book';
+import { BibliotecaNavigationProp } from '../types/Navigation';
 import { getAllBooks, deleteBook, updateBook, initializeBooksOnFirstRun } from '../services/bookStorage';
 import { createInitialLibrary } from '../services/initialLibrary';
-import { sortBooksByEndDate } from '../utils/filters';
+import {
+  BOOK_SORT_OPTIONS,
+  BookSortOption,
+  BookYearSection,
+  groupBooksByYear,
+  isBookSortOption,
+  sortBooks,
+  sortBooksByEndDate,
+} from '../utils/filters';
 import { calculateStats } from '../services/statsService';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -23,30 +31,28 @@ import { HapticService } from '../services/HapticService';
 import { FadeInView } from '../components/FadeInView';
 
 const GOAL_KEY = 'lecturas_reto_goal';
+const SORT_KEY = 'lecturas_books_sort';
 
 type FilterType = 'Todos' | Rating | string;
 
-interface BookSection {
-  title: string;
-  data: Book[];
-}
-
 export const BooksScreen = () => {
   const [books, setBooks] = useState<Book[]>([]);
-  const [bookSections, setBookSections] = useState<BookSection[]>([]);
+  const [bookSections, setBookSections] = useState<BookYearSection[]>([]);
+  const [sortedFilteredBooks, setSortedFilteredBooks] = useState<Book[]>([]);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('Todos');
-  const filtersRef = useRef({ query, activeFilter });
-  filtersRef.current = { query, activeFilter };
+  const [sortBy, setSortBy] = useState<BookSortOption>('date_desc');
+  const filtersRef = useRef({ query, activeFilter, sortBy });
+  filtersRef.current = { query, activeFilter, sortBy };
   const isLoadedRef = useRef(false);
   const [streak, setStreak] = useState(0);
   const [updatingCovers, setUpdatingCovers] = useState(false);
   const [lastBook, setLastBook] = useState<Book | null>(null);
   const [goal, setGoal] = useState(20);
 
-  const navigation = useNavigation<StackNavigationProp<any>>();
+  const navigation = useNavigation<BibliotecaNavigationProp>();
   const notice = useNotice();
   const { colors, isDark, toggleTheme } = useTheme();
   const globalStyles = getGlobalStyles(colors);
@@ -59,25 +65,6 @@ export const BooksScreen = () => {
     'Todos', 'Muy bueno', 'Bueno', 'Regular', 'Malo', currentYear, nextYear
   ];
 
-  const groupBooksByYear = (books: Book[]): BookSection[] => {
-    const grouped: { [year: string]: Book[] } = {};
-
-    books.forEach(book => {
-      const year = book.endDate.split('-')[0];
-      if (!grouped[year]) {
-        grouped[year] = [];
-      }
-      grouped[year].push(book);
-    });
-
-    const sortedYears = Object.keys(grouped).sort((a, b) => parseInt(b) - parseInt(a));
-
-    return sortedYears.map(year => ({
-      title: year,
-      data: grouped[year].sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
-    }));
-  };
-
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -86,16 +73,23 @@ export const BooksScreen = () => {
       const sortedBooks = sortBooksByEndDate(allBooks, false);
       setBooks(sortedBooks);
 
-      const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
+      const [savedGoal, savedSort] = await Promise.all([
+        AsyncStorage.getItem(GOAL_KEY),
+        AsyncStorage.getItem(SORT_KEY),
+      ]);
       const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
       setGoal(currentGoal);
+      const effectiveSort = isBookSortOption(savedSort) ? savedSort : filtersRef.current.sortBy;
+      if (effectiveSort !== filtersRef.current.sortBy) {
+        setSortBy(effectiveSort);
+      }
 
       const stats = calculateStats(allBooks, currentGoal);
       setStreak(stats.readingStreak);
 
       setLastBook(sortedBooks[0] ?? null);
 
-      applyFilters(sortedBooks, filtersRef.current.query, filtersRef.current.activeFilter);
+      applyFilters(sortedBooks, filtersRef.current.query, filtersRef.current.activeFilter, effectiveSort);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Error de lectura desconocido';
       notice.alert('No se puede abrir la biblioteca', `Tus libros guardados no se han modificado. Vuelve a entrar en Biblioteca para intentarlo de nuevo.\n\nDetalle del error: ${detail}`, [{ text: 'Entendido' }], { variant: 'error' });
@@ -111,7 +105,12 @@ export const BooksScreen = () => {
     }, [])
   );
 
-  const applyFilters = (sourceBooks: Book[], searchQuery: string, filter: FilterType) => {
+  const applyFilters = (
+    sourceBooks: Book[],
+    searchQuery: string,
+    filter: FilterType,
+    currentSort: BookSortOption = filtersRef.current.sortBy,
+  ) => {
     let result = sourceBooks;
 
     if (searchQuery.trim()) {
@@ -131,19 +130,27 @@ export const BooksScreen = () => {
       }
     }
 
-    const sections = groupBooksByYear(result);
-    setBookSections(sections);
+    setSortedFilteredBooks(sortBooks(result, currentSort));
+    setBookSections(groupBooksByYear(result, currentSort));
   };
 
   const handleSearch = (text: string) => {
     setQuery(text);
-    applyFilters(books, text, activeFilter);
+    applyFilters(books, text, activeFilter, sortBy);
   };
 
   const handleFilterPress = (filter: FilterType) => {
     HapticService.selection();
     setActiveFilter(filter);
-    applyFilters(books, query, filter);
+    applyFilters(books, query, filter, sortBy);
+  };
+
+  const handleSortPress = (nextSort: BookSortOption) => {
+    if (nextSort === sortBy) return;
+    HapticService.selection();
+    setSortBy(nextSort);
+    applyFilters(books, query, activeFilter, nextSort);
+    AsyncStorage.setItem(SORT_KEY, nextSort).catch(() => undefined);
   };
 
   const handleDelete = (id: string) => {
@@ -326,6 +333,39 @@ export const BooksScreen = () => {
           );
         })}
       </ScrollView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortScroll}>
+        <View style={styles.sortLabelWrap}>
+          <MaterialCommunityIcons name="sort" size={16} color={colors.ink3} />
+          <Text style={[styles.sortPrefix, { color: colors.ink3 }]}>Orden:</Text>
+        </View>
+        {BOOK_SORT_OPTIONS.map(option => {
+          const isActive = sortBy === option.id;
+          return (
+            <TouchableOpacity
+              key={option.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              activeOpacity={0.7}
+              style={[
+                styles.sortChip,
+                {
+                  backgroundColor: isActive ? colors.accentSoft : colors.cardBg,
+                  borderColor: isActive ? colors.accent : colors.border,
+                },
+              ]}
+              onPress={() => handleSortPress(option.id)}
+            >
+              <Text style={[
+                styles.sortText,
+                { color: isActive ? colors.accent : colors.ink2, fontWeight: isActive ? '700' : '500' },
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 
@@ -360,6 +400,8 @@ export const BooksScreen = () => {
   };
 
   const selectedSection = selectedYear ? bookSections.find(section => section.title === selectedYear) : null;
+  const showFlatSortedList = !selectedYear && sortBy !== 'date_desc' && sortBy !== 'date_asc';
+  const activeSortLabel = BOOK_SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? 'Más recientes';
 
   return (
     <View style={globalStyles.container}>
@@ -398,6 +440,30 @@ export const BooksScreen = () => {
               />
             )}
           </FadeInView>
+        ) : showFlatSortedList ? (
+          <View>
+            <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>
+              {`${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`}
+            </Text>
+            {sortedFilteredBooks.length > 0 ? (
+              sortedFilteredBooks.map((book, index) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  index={index}
+                  onPress={() => navigation.navigate('BookDetail', { id: book.id, book })}
+                  onEdit={() => navigation.navigate('EditBook', { book })}
+                  onDelete={() => handleDelete(book.id)}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon="book-open-blank-variant"
+                title="No hay libros"
+                subtitle="No hay lecturas registradas para este filtro."
+              />
+            )}
+          </View>
         ) : (
           <View style={styles.yearGrid}>
             <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>HISTORIAL POR AÑOS</Text>
@@ -590,6 +656,32 @@ const styles = StyleSheet.create({
   filterText: {
     ...theme.typography.caption,
     fontSize: 13,
+  },
+  sortScroll: {
+    flexDirection: 'row',
+    marginBottom: theme.spacing.s,
+  },
+  sortLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 8,
+  },
+  sortPrefix: {
+    ...theme.typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.round,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  sortText: {
+    ...theme.typography.caption,
+    fontSize: 12,
   },
   sectionLabel: {
     ...theme.typography.small,

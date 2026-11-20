@@ -3,8 +3,8 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { AddStackNavigationProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { parseNotes, convertToBook, ParsedBook } from '../utils/parser';
@@ -16,7 +16,7 @@ export const ImportBooksScreen = () => {
   const [importing, setImporting] = useState(false);
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<ParsedBook[]>([]);
-  const navigation = useNavigation<StackNavigationProp<any>>();
+  const navigation = useNavigation<AddStackNavigationProp>();
   const notice = useNotice();
   const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);

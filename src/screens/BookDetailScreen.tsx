@@ -12,7 +12,6 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -26,6 +25,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { Book } from '../types/Book';
+import { BibliotecaNavigationProp, BookDetailRouteProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useNotice } from '../context/NoticeContext';
@@ -94,8 +94,8 @@ const ScalePressable: React.FC<ScalePressableProps> = ({
 };
 
 export const BookDetailScreen = () => {
-  const route = useRoute<any>();
-  const navigation = useNavigation<StackNavigationProp<any>>();
+  const route = useRoute<BookDetailRouteProp>();
+  const navigation = useNavigation<BibliotecaNavigationProp>();
   const initialBook: Book | undefined = route.params?.book;
   const bookId = initialBook?.id;
   const [book, setBook] = useState<Book | undefined>(initialBook);

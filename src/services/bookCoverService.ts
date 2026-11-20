@@ -28,8 +28,33 @@ export const rankBookCovers = (covers: BookCover[], title: string, author = ''):
   }).slice(0, 8).map(item => item.cover);
 };
 
+interface GoogleBooksVolumeItem {
+  volumeInfo?: {
+    title?: unknown;
+    authors?: unknown;
+    imageLinks?: {
+      thumbnail?: unknown;
+      smallThumbnail?: unknown;
+    };
+  };
+}
+
+interface GoogleBooksResponse {
+  items?: unknown;
+}
+
+interface OpenLibraryDoc {
+  title?: unknown;
+  author_name?: unknown;
+  cover_i?: unknown;
+}
+
+interface OpenLibraryResponse {
+  docs?: unknown;
+}
+
 const abortError = () => Object.assign(new Error('Búsqueda cancelada'), { name: 'AbortError' });
-const fetchJson = async (url: string, signal?: AbortSignal): Promise<any> => {
+const fetchJson = async (url: string, signal?: AbortSignal): Promise<unknown> => {
   if (signal?.aborted) throw abortError();
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -48,9 +73,10 @@ const fetchJson = async (url: string, signal?: AbortSignal): Promise<any> => {
 const googleCovers = async (title: string, author: string, signal?: AbortSignal): Promise<BookCover[]> => {
   const clean = (value: string) => value.replace(/["\\]/g, ' ').trim();
   const query = `intitle:"${clean(title)}"${author ? ` inauthor:"${clean(author)}"` : ''}`;
-  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books`, signal);
+  const data = (await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books`, signal)) as GoogleBooksResponse | null;
   if (!Array.isArray(data?.items)) return [];
-  return data.items.flatMap((item: any) => {
+  return data.items.flatMap((rawItem: unknown) => {
+    const item = rawItem as GoogleBooksVolumeItem | null | undefined;
     const info = item?.volumeInfo;
     const url = info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail;
     if (typeof info?.title !== 'string' || typeof url !== 'string' || !/^https?:\/\//i.test(url)) return [];
@@ -61,10 +87,11 @@ const googleCovers = async (title: string, author: string, signal?: AbortSignal)
 
 const openLibraryCovers = async (title: string, author: string, signal?: AbortSignal): Promise<BookCover[]> => {
   const query = `title=${encodeURIComponent(title)}${author ? `&author=${encodeURIComponent(author)}` : ''}`;
-  const data = await fetchJson(`https://openlibrary.org/search.json?${query}&limit=10&lang=es&fields=title,author_name,cover_i`, signal);
+  const data = (await fetchJson(`https://openlibrary.org/search.json?${query}&limit=10&lang=es&fields=title,author_name,cover_i`, signal)) as OpenLibraryResponse | null;
   if (!Array.isArray(data?.docs)) return [];
-  return data.docs.flatMap((doc: any) => {
-    if (typeof doc?.title !== 'string' || !Number.isInteger(doc.cover_i) || doc.cover_i <= 0) return [];
+  return data.docs.flatMap((rawDoc: unknown) => {
+    const doc = rawDoc as OpenLibraryDoc | null | undefined;
+    if (typeof doc?.title !== 'string' || typeof doc.cover_i !== 'number' || !Number.isInteger(doc.cover_i) || doc.cover_i <= 0) return [];
     return [{ title: doc.title, author: Array.isArray(doc.author_name) ? doc.author_name.filter((value: unknown) => typeof value === 'string').join(', ') : '',
       url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg?default=false`, source: 'Open Library' as const }];
   });

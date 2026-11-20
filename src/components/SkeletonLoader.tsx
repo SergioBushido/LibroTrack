@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, DimensionValue, StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { theme } from '../constants/theme';
 
 interface Props {
-  width?: number | string;
-  height?: number | string;
+  width?: DimensionValue;
+  height?: DimensionValue;
   borderRadius?: number;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const SkeletonLoader: React.FC<Props> = ({ 

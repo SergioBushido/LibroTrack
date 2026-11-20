@@ -6,6 +6,21 @@ export interface SearchResult {
   coverUrl?: string;
 }
 
+interface GoogleSearchVolumeItem {
+  id?: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    imageLinks?: {
+      thumbnail?: string;
+    };
+  };
+}
+
+interface GoogleSearchResponse {
+  items?: GoogleSearchVolumeItem[];
+}
+
 export const searchBooksOnGoogle = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
   if (!query.trim()) return [];
 
@@ -28,17 +43,17 @@ export const searchBooksOnGoogle = async (query: string, signal?: AbortSignal): 
       throw new Error('Error al consultar la API de Google Books');
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as GoogleSearchResponse;
     
-    if (!data.items) return [];
+    if (!Array.isArray(data.items)) return [];
 
-    return data.items.map((item: any) => {
-      const info = item.volumeInfo;
+    return data.items.map((item, index) => {
+      const info = item.volumeInfo ?? {};
       return {
-        id: item.id,
+        id: item.id || `${query}-${index}`,
         title: info.title || 'Título desconocido',
-        author: info.authors ? info.authors.join(', ') : 'Autor desconocido',
-        coverUrl: info.imageLinks?.thumbnail?.replace('http:', 'https:') || undefined,
+        author: Array.isArray(info.authors) && info.authors.length > 0 ? info.authors.join(', ') : 'Autor desconocido',
+        coverUrl: info.imageLinks?.thumbnail?.replace(/^http:/i, 'https:') || undefined,
       };
     });
   } catch (error) {

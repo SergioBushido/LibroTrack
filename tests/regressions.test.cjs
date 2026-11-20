@@ -720,3 +720,26 @@ test('cloudBackupService normaliza Gist IDs, cifra token en SecureStore, sube pr
   assert.equal(cleared.hasToken, false);
   assert.equal(secureStore.has(service.CLOUD_TOKEN_KEY), false);
 });
+
+test('sortBooks y groupBooksByYear ordenan por fecha, valoración, título español y duración sin mutar', () => {
+  const { sortBooks, groupBooksByYear, isBookSortOption } = loader()('src/utils/filters.ts');
+  assert.equal(isBookSortOption('rating_desc'), true);
+  assert.equal(isBookSortOption('desconocido'), false);
+
+  const library = [
+    { ...book('b', 2024, 10), title: 'Zafiro', rating: 'Regular' },
+    { ...book('a', 2023, 2), title: 'Árbol', rating: 'Muy bueno' },
+    { ...book('c', 2025, 5), title: 'Bosque', rating: 'Bueno' },
+  ];
+  const snapshot = JSON.stringify(library);
+
+  assert.deepEqual(sortBooks(library, 'date_desc').map(item => item.id), ['c', 'b', 'a']);
+  assert.deepEqual(sortBooks(library, 'date_asc').map(item => item.id), ['a', 'b', 'c']);
+  assert.deepEqual(sortBooks(library, 'rating_desc').map(item => item.id), ['a', 'c', 'b']);
+  assert.deepEqual(sortBooks(library, 'title_asc').map(item => item.id), ['a', 'c', 'b']);
+  assert.deepEqual(sortBooks(library, 'duration_asc').map(item => item.id), ['a', 'c', 'b']);
+  assert.equal(JSON.stringify(library), snapshot, 'no muta el array de entrada');
+
+  assert.deepEqual(groupBooksByYear(library, 'date_desc').map(section => section.title), ['2025', '2024', '2023']);
+  assert.deepEqual(groupBooksByYear(library, 'date_asc').map(section => section.title), ['2023', '2024', '2025']);
+});

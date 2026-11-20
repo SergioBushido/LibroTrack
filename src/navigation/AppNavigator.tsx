@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
@@ -11,34 +11,39 @@ import { EditBookScreen } from '../screens/EditBookScreen';
 import { StatsScreen } from '../screens/StatsScreen';
 import { InternetSearchScreen } from '../screens/InternetSearchScreen';
 import { ImportBooksScreen } from '../screens/ImportBooksScreen';
+import { AddStackParamList, BibliotecaStackParamList, RootTabParamList } from '../types/Navigation';
 
 import { theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
-const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator<RootTabParamList>();
+const BibliotecaStackNav = createStackNavigator<BibliotecaStackParamList>();
+const AddStackNav = createStackNavigator<AddStackParamList>();
 
 const BibliotecaStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="BooksList" component={BooksScreen} />
-    <Stack.Screen name="BookDetail" component={BookDetailScreen} />
-    <Stack.Screen name="EditBook" component={EditBookScreen} />
-  </Stack.Navigator>
+  <BibliotecaStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <BibliotecaStackNav.Screen name="BooksList" component={BooksScreen} />
+    <BibliotecaStackNav.Screen name="BookDetail" component={BookDetailScreen} />
+    <BibliotecaStackNav.Screen name="EditBook" component={EditBookScreen} />
+  </BibliotecaStackNav.Navigator>
 );
 
 const AddStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="AddBookForm" component={AddBookScreen} />
-    <Stack.Screen name="ImportBooks" component={ImportBooksScreen} />
-  </Stack.Navigator>
+  <AddStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <AddStackNav.Screen name="AddBookForm" component={AddBookScreen} />
+    <AddStackNav.Screen name="ImportBooks" component={ImportBooksScreen} />
+  </AddStackNav.Navigator>
 );
 
-const CustomTabBarButton = ({ children, onPress }: any) => {
+const CustomTabBarButton = ({ children, onPress, accessibilityLabel, accessibilityState }: BottomTabBarButtonProps) => {
   const { colors } = useTheme();
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? 'Añadir libro'}
+      accessibilityState={accessibilityState}
       style={styles.customAddBtn}
-      onPress={onPress}
+      onPress={onPress ?? undefined}
     >
       <View style={[styles.customAddInner, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]}>
         {children}
@@ -68,15 +73,15 @@ export const AppNavigator = () => {
             shadowColor: isDark ? colors.accent : colors.ink 
           }
         ],
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: any = 'book';
+        tabBarIcon: ({ focused, color }) => {
+          let iconName: React.ComponentProps<typeof MaterialCommunityIcons>['name'] = 'book';
 
           if (route.name === 'Biblioteca') {
             iconName = focused ? 'book-open-page-variant' : 'book-outline';
           } else if (route.name === 'Stats') {
-            iconName = focused ? 'chart-bar' : 'chart-bar';
+            iconName = 'chart-bar';
           } else if (route.name === 'Internet') {
-            iconName = focused ? 'web' : 'web';
+            iconName = 'web';
           }
 
           if (route.name === 'Añadir') {

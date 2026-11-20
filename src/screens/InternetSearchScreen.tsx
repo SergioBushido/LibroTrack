@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { RootTabNavigationProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { searchBooksOnGoogle, SearchResult } from '../services/internetSearchService';
@@ -12,7 +12,7 @@ import { HapticService } from '../services/HapticService';
 import { FadeInView } from '../components/FadeInView';
 
 export const InternetSearchScreen = () => {
-  const navigation = useNavigation<StackNavigationProp<any>>();
+  const navigation = useNavigation<RootTabNavigationProp>();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,8 +49,8 @@ export const InternetSearchScreen = () => {
     try {
       const books = await searchBooksOnGoogle(query, abortControllerRef.current.signal);
       setResults(books);
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+    } catch (error: unknown) {
+      if (!(error instanceof Error) || error.name !== 'AbortError') {
         console.error(error);
       }
     } finally {
@@ -85,7 +85,11 @@ export const InternetSearchScreen = () => {
     });
   };
 
-  const engines = [
+  const engines: {
+    id: string;
+    name: string;
+    icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  }[] = [
     { id: 'google', name: 'Google', icon: 'google' },
     { id: 'googlebooks', name: 'Google Books', icon: 'book-open-page-variant' },
     { id: 'wikipedia', name: 'Wikipedia', icon: 'wikipedia' },
@@ -172,7 +176,7 @@ export const InternetSearchScreen = () => {
               onPress={() => handleExternalSearch(engine.id)}
               disabled={!query.trim()}
             >
-              <MaterialCommunityIcons name={engine.icon as any} size={28} color={query.trim() ? colors.accent2 : colors.ink3} />
+              <MaterialCommunityIcons name={engine.icon} size={28} color={query.trim() ? colors.accent2 : colors.ink3} />
               <Text style={[styles.engineName, { color: query.trim() ? colors.ink : colors.ink3 }]}>
                 {engine.name}
               </Text>

@@ -2,10 +2,10 @@ import { useNotice } from '../context/NoticeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Genre, Mood, Rating } from '../types/Book';
+import { AddBookRouteProp, AddStackNavigationProp } from '../types/Navigation';
 import { theme, getGlobalStyles } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { DateField } from '../components/DateField';
@@ -20,8 +20,8 @@ import { useEffect } from 'react';
 const RATINGS: Rating[] = ['Malo', 'Regular', 'Bueno', 'Muy bueno'];
 
 export const AddBookScreen = () => {
-  const navigation = useNavigation<StackNavigationProp<any>>();
-  const route = useRoute<RouteProp<{ params: { title?: string, author?: string, coverUrl?: string } }, 'params'>>();
+  const navigation = useNavigation<AddStackNavigationProp>();
+  const route = useRoute<AddBookRouteProp>();
   const notice = useNotice();
   const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);

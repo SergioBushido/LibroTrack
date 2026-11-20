@@ -6,6 +6,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { NoticeProvider } from './src/context/NoticeContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { configureNotificationHandler } from './src/services/notificationService';
 
 const MainApp = () => {
@@ -28,11 +29,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <NavigationContainer>
-          <NoticeProvider>
-            <MainApp />
-          </NoticeProvider>
-        </NavigationContainer>
+        <ErrorBoundary>
+          <NavigationContainer>
+            <NoticeProvider>
+              <MainApp />
+            </NoticeProvider>
+          </NavigationContainer>
+        </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>
   );
