@@ -11,6 +11,7 @@ import { DateField } from '../components/DateField';
 import { GenreSelector } from '../components/GenreSelector';
 import { MoodSelector } from '../components/MoodSelector';
 import { updateBook } from '../services/bookStorage';
+import { BookCover, searchBookCovers } from '../services/bookCoverService';
 import { validateDates } from '../utils/dateUtils';
 import { BookPlaceholder } from '../components/BookPlaceholder';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -27,6 +28,12 @@ export const EditBookScreen = () => {
   const layout = useResponsiveLayout();
 
   const savingRef = useRef(false);
+  const coverRequest = useRef(0);
+  const coverController = useRef<AbortController | null>(null);
+  const coverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasEditedQuery = useRef(false);
+  const manualCoverChoice = useRef(Boolean(book?.coverUrl));
+
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState(book?.title || '');
   const [author, setAuthor] = useState(book?.author || '');
@@ -38,9 +45,22 @@ export const EditBookScreen = () => {
   const [notes, setNotes] = useState(book?.notes || '');
   const [quote, setQuote] = useState(book?.quote || '');
   const [coverUrl, setCoverUrl] = useState(book?.coverUrl || '');
+  const [coverCandidates, setCoverCandidates] = useState<BookCover[]>([]);
+  const [coverMessage, setCoverMessage] = useState('');
   const [isFetchingCover, setIsFetchingCover] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageError, setImageError] = useState(false);
+
+  const cancelCoverSearch = () => {
+    coverRequest.current++;
+    coverController.current?.abort();
+    if (coverTimer.current) clearTimeout(coverTimer.current);
+    setIsFetchingCover(false);
+  };
+
+  useEffect(() => () => {
+    cancelCoverSearch();
+  }, []);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -56,35 +76,60 @@ export const EditBookScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleFetchPreview = async (silent = false) => {
+  const handleFetchPreview = async (refresh = false) => {
     if (!title.trim()) {
-      if (!silent) notice.alert('Falta el título', 'Escribe el título del libro para buscar su portada.', [{ text: 'Entendido' }]);
+      setCoverMessage('Introduce el título para buscar una portada.');
       return;
     }
+    cancelCoverSearch();
+    const request = coverRequest.current;
+    const controller = new AbortController();
+    coverController.current = controller;
     setIsFetchingCover(true);
+    setCoverMessage('');
     try {
-      const { fetchBookCoverUrl } = await import('../services/bookCoverService');
-      const url = await fetchBookCoverUrl(title.trim(), author.trim());
-      if (url || !silent) {
-        setCoverUrl(url || '');
-        setImageError(false);
+      const covers = await searchBookCovers(title, author, controller.signal, refresh);
+      if (request !== coverRequest.current) return;
+      setCoverCandidates(covers);
+      if (refresh || !manualCoverChoice.current) {
+        if (covers[0]?.url) {
+          setCoverUrl(covers[0].url);
+          setImageError(false);
+        }
       }
-    } catch (e) {
-      console.error(e);
+      if (!covers.length) {
+        setCoverMessage('No hay portadas coincidentes. Completa el autor o conserva la actual.');
+      }
+    } catch (error) {
+      if (request !== coverRequest.current) return;
+      setCoverMessage(error instanceof Error ? error.message : 'No se pudieron buscar portadas.');
     } finally {
-      setIsFetchingCover(false);
+      if (request === coverRequest.current) setIsFetchingCover(false);
     }
   };
 
   useEffect(() => {
-    if (!title.trim()) return;
-
-    const timeoutId = setTimeout(() => {
-      handleFetchPreview(true);
-    }, 1200);
-
-    return () => clearTimeout(timeoutId);
+    if (!hasEditedQuery.current) return;
+    if (title.trim().length >= 2 && !manualCoverChoice.current) {
+      coverTimer.current = setTimeout(() => handleFetchPreview(false), 1200);
+    } else {
+      setIsFetchingCover(false);
+    }
+    return () => {
+      if (coverTimer.current) clearTimeout(coverTimer.current);
+      coverRequest.current++;
+      coverController.current?.abort();
+      setIsFetchingCover(false);
+    };
   }, [title, author]);
+
+  const handleCoverError = (url: string) => {
+    setCoverCandidates(previous => previous.filter(cover => cover.url !== url));
+    if (coverUrl === url) {
+      setImageError(true);
+    }
+    setCoverMessage('No se pudo cargar esa imagen. Elige otra portada o vuelve a buscar.');
+  };
 
   const handleSave = async () => {
     if (savingRef.current) return;
@@ -96,6 +141,7 @@ export const EditBookScreen = () => {
     savingRef.current = true;
     setSaving(true);
     try {
+      cancelCoverSearch();
       await updateBook(book.id, {
         title: title.trim(),
         author: author.trim(),
@@ -124,42 +170,102 @@ export const EditBookScreen = () => {
 
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={[styles.content, layout.contentStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Volver" style={styles.backBtn} onPress={() => navigation.goBack()}>
         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
       </TouchableOpacity>
 
       <Text style={[styles.screenTitle, { color: colors.ink }]}>Editar libro</Text>
 
-      <View style={styles.coverPreviewContainer}>
+      <View style={[styles.coverPreviewContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         {coverUrl && !imageError ? (
           <Image
+            key={coverUrl}
             source={{ uri: coverUrl }}
             style={styles.coverPreview}
             resizeMode="contain"
-            onError={() => setImageError(true)}
+            onError={() => handleCoverError(coverUrl)}
           />
         ) : (
-          <BookPlaceholder title={title || book.title} author={author || book.author} height={150} />
+          <BookPlaceholder title={title || book.title} author={author || book.author} height={180} />
         )}
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Buscar portadas"
           style={[styles.searchCoverBtn, { backgroundColor: colors.accent }]}
-          onPress={() => handleFetchPreview(false)}
-          disabled={isFetchingCover}
+          onPress={() => handleFetchPreview(true)}
+          disabled={isFetchingCover || saving}
         >
           {isFetchingCover ? (
-            <ActivityIndicator color="#FFF" size="small" />
+            <ActivityIndicator color={colors.onAccent} size="small" />
           ) : (
-            <MaterialCommunityIcons name="image-search-outline" size={18} color="#FFF" />
+            <>
+              <MaterialCommunityIcons name="image-search-outline" size={18} color={colors.onAccent} />
+              <Text style={[styles.searchCoverBtnText, { color: colors.onAccent }]}>Buscar portada</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
+
+      {isFetchingCover && <Text accessibilityLiveRegion="polite" style={[styles.coverMessage, { color: colors.ink2 }]}>Buscando portadas… Puedes guardar sin esperar.</Text>}
+      {!!coverMessage && <Text accessibilityLiveRegion="polite" style={[styles.coverMessage, { color: colors.ink2 }]}>{coverMessage}</Text>}
+      {(coverCandidates.length > 0 || Boolean(coverUrl)) && (
+        <View style={styles.field}>
+          {coverCandidates.length > 0 && (
+            <>
+              <Text style={[styles.label, { color: colors.ink }]}>Elige la portada de tu edición</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {coverCandidates.map(cover => (
+                  <TouchableOpacity
+                    key={cover.url}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Seleccionar portada: ${cover.title}, ${cover.author}`}
+                    accessibilityState={{ selected: coverUrl === cover.url }}
+                    disabled={saving}
+                    onPress={() => {
+                      manualCoverChoice.current = true;
+                      setCoverUrl(cover.url);
+                      setImageError(false);
+                      setCoverMessage('');
+                    }}
+                    style={[styles.coverOption, { borderColor: coverUrl === cover.url ? colors.accent : colors.border }]}
+                  >
+                    <Image source={{ uri: cover.url }} style={styles.coverThumbnail} resizeMode="contain" onError={() => handleCoverError(cover.url)} />
+                    <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 12 }}>{cover.title}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.ink2, fontSize: 11 }}>{cover.author}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
+          {Boolean(coverUrl) && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={() => {
+                manualCoverChoice.current = true;
+                setCoverUrl('');
+                setImageError(false);
+                setCoverMessage('El libro se guardará sin portada.');
+              }}
+              style={{ paddingVertical: theme.spacing.s }}
+            >
+              <Text style={{ color: colors.accent }}>Quitar portada</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Título *</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.title && { borderColor: colors.error }]}
           value={title}
-          onChangeText={setTitle}
+          editable={!saving}
+          onChangeText={value => {
+            hasEditedQuery.current = true;
+            setTitle(value);
+            if (errors.title) setErrors(previous => ({ ...previous, title: '' }));
+          }}
         />
         {errors.title && <Text style={[styles.errorText, { color: colors.error }]}>{errors.title}</Text>}
       </View>
@@ -169,7 +275,11 @@ export const EditBookScreen = () => {
         <TextInput
           style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
           value={author}
-          onChangeText={setAuthor}
+          editable={!saving}
+          onChangeText={value => {
+            hasEditedQuery.current = true;
+            setAuthor(value);
+          }}
         />
       </View>
 
@@ -208,12 +318,16 @@ export const EditBookScreen = () => {
             return (
               <TouchableOpacity
                 key={r}
+                disabled={saving}
                 style={[
                   styles.ratingBtn,
                   layout.compact && { width: '100%' },
                   { backgroundColor: isSelected ? bg : colors.cardBg, borderColor: isSelected ? textColor : colors.border }
                 ]}
-                onPress={() => setRating(r)}
+                onPress={() => {
+                  setRating(r);
+                  if (errors.rating) setErrors(previous => ({ ...previous, rating: '' }));
+                }}
               >
                 <Text style={[styles.ratingText, { color: isSelected ? textColor : colors.ink }]}>{r}</Text>
               </TouchableOpacity>
@@ -233,6 +347,7 @@ export const EditBookScreen = () => {
         <TextInput
           style={[styles.input, styles.textArea, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
           value={notes}
+          editable={!saving}
           onChangeText={setNotes}
           multiline
           numberOfLines={4}
@@ -244,13 +359,14 @@ export const EditBookScreen = () => {
         <TextInput
           style={[styles.input, styles.textArea, { minHeight: 60, backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }]}
           value={quote}
+          editable={!saving}
           onChangeText={setQuote}
           multiline
         />
       </View>
 
-      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} disabled={saving} onPress={handleSave}>
-        <Text style={[styles.saveBtnText, { color: '#FFF' }]}>Guardar cambios</Text>
+      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent), opacity: saving ? 0.6 : 1 }]} disabled={saving} onPress={handleSave}>
+        <Text style={[styles.saveBtnText, { color: colors.onAccent }]}>{saving ? 'Guardando…' : 'Guardar cambios'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -259,7 +375,7 @@ export const EditBookScreen = () => {
 const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.l,
-    paddingBottom: 120, // Espacio para el Tab Bar flotante
+    paddingBottom: 120,
   },
   backBtn: {
     marginBottom: theme.spacing.m,
@@ -270,9 +386,6 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: theme.spacing.m,
-  },
-  row: {
-    flexDirection: 'row',
   },
   label: {
     ...theme.typography.caption,
@@ -318,14 +431,17 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontWeight: '600',
   },
+  coverMessage: { ...theme.typography.caption, marginBottom: theme.spacing.m },
+  coverOption: { width: 108, padding: 6, marginRight: 8, borderWidth: 2, borderRadius: theme.borderRadius.m },
+  coverThumbnail: { width: 92, height: 130, marginBottom: 6 },
   coverPreviewContainer: {
     width: '100%',
-    height: 150,
+    height: 180,
     marginBottom: theme.spacing.l,
     borderRadius: theme.borderRadius.m,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    position: 'relative',
   },
   coverPreview: {
     width: '100%',
@@ -335,12 +451,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: theme.spacing.s,
     right: theme.spacing.s,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadow,
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    gap: theme.spacing.xs,
+    ...theme.shadow.medium,
     elevation: 4,
-  }
+  },
+  searchCoverBtnText: {
+    ...theme.typography.small,
+    fontWeight: '600',
+  },
 });

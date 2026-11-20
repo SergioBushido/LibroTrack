@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Book, BookFilters } from '../types/Book';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { filterBooksList } from '../utils/filters';
 import { validateBooks } from '../utils/bookValidation';
 
-const STORAGE_KEY = 'lecturas_books';
+const STORAGE_KEY = STORAGE_KEYS.BOOKS;
 
 let pendingWrite: Promise<unknown> = Promise.resolve();
 const serializeWrite = <T>(operation: () => Promise<T>): Promise<T> => {

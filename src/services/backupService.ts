@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { getAllBooks, replaceAllBooks } from './bookStorage';
 import { File, Directory, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -6,6 +7,8 @@ import { Book } from '../types/Book';
 import { validateBooks } from '../utils/bookValidation';
 import { calculateReadingDays } from '../utils/dateUtils';
 import { sortBooksByEndDate } from '../utils/filters';
+
+const getLocalDateStamp = (date: Date = new Date()): string => format(date, 'yyyy-MM-dd');
 
 const CSV_HEADERS = [
   'Título',
@@ -107,7 +110,7 @@ export const exportBackup = async (): Promise<string> => {
   const books = await getAllBooks();
   const backup = createBackupPayload(books);
 
-  const dateStamp = new Date().toISOString().split('T')[0];
+  const dateStamp = getLocalDateStamp();
   return writeAndShareExport(
     `librotrack-backup-${dateStamp}.json`,
     JSON.stringify(backup, null, 2),
@@ -125,7 +128,7 @@ export const exportBooksCsv = async (): Promise<string> => {
   }
   const books = await getAllBooks();
   const csv = booksToCsv(books);
-  const dateStamp = new Date().toISOString().split('T')[0];
+  const dateStamp = getLocalDateStamp();
 
   return writeAndShareExport(
     `librotrack-biblioteca-${dateStamp}.csv`,

@@ -743,3 +743,48 @@ test('sortBooks y groupBooksByYear ordenan por fecha, valoración, título espa�
   assert.deepEqual(groupBooksByYear(library, 'date_desc').map(section => section.title), ['2025', '2024', '2023']);
   assert.deepEqual(groupBooksByYear(library, 'date_asc').map(section => section.title), ['2023', '2024', '2025']);
 });
+
+test('parseReadingGoal y calculateStats filtran métricas por año, desglosan géneros y evitan NaN/Infinity', () => {
+  const { parseReadingGoal } = loader()('src/constants/storageKeys.ts');
+  assert.equal(parseReadingGoal('25'), 25);
+  assert.equal(parseReadingGoal('0'), 20);
+  assert.equal(parseReadingGoal('-5'), 20);
+  assert.equal(parseReadingGoal('abc'), 20);
+  assert.equal(parseReadingGoal(null), 20);
+
+  const { calculateStats } = loader()('src/services/statsService.ts');
+  const library = [
+    { ...book('a23', 2023, 20), rating: 'Malo', genre: 'Terror', mood: '🌧️' },
+    { ...book('a24', 2024, 4), rating: 'Muy bueno', genre: 'Novela', mood: '🔥' },
+    { ...book('b24', 2024, 6), rating: 'Bueno', genre: 'Novela', mood: '☀️' },
+  ];
+
+  const stats2024 = calculateStats(library, 0, 2024);
+  assert.equal(stats2024.avgDaysPerBook, 5);
+  assert.equal(stats2024.booksByRating['Malo'], 0);
+  assert.equal(stats2024.booksByRating['Muy bueno'], 1);
+  assert.deepEqual(stats2024.booksByGenre, { Novela: 2 });
+  assert.equal(stats2024.retaProgress.goal, 20);
+  assert.equal(Number.isFinite(stats2024.retaProgress.percentage), true);
+
+  const statsTotal = calculateStats(library, 10, 0);
+  assert.equal(statsTotal.booksByRating['Malo'], 1);
+  assert.deepEqual(statsTotal.booksByGenre, { Terror: 1, Novela: 2 });
+  assert.equal(statsTotal.avgDaysPerBook, 10);
+});
+
+test('parseNotes conserva títulos cortos de 1-2 caracteres e ignora separadores vacíos', () => {
+  const { parseNotes } = loader()('src/utils/parser.ts');
+  const parsed = parseNotes('2025\nMarzo\n- It\n- Yo\n- Oz\n- ---\n- Q');
+  assert.deepEqual(parsed.map(item => item.title), ['It', 'Yo', 'Oz', 'Q']);
+});
+
+test('searchBooksOnGoogle propaga errores HTTP y AbortError en lugar de ocultarlos', async t => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 503, json: async () => ({}) }));
+  const { searchBooksOnGoogle } = loader()('src/services/internetSearchService.ts');
+  await assert.rejects(searchBooksOnGoogle('Dune'), /HTTP 503/);
+
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(searchBooksOnGoogle('Dune', controller.signal), { name: 'AbortError' });
+});

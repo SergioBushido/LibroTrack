@@ -236,8 +236,8 @@ export const BackupActions = ({ onRestored }: { onRestored: () => Promise<void> 
                 onPress={() => run('cloudUpload')}
                 style={[styles.button, { backgroundColor: colors.accent, borderColor: colors.accent, opacity: working ? 0.5 : 1 }]}
               >
-                <MaterialCommunityIcons name="cloud-upload-outline" size={18} color="#FFF" />
-                <Text style={[styles.buttonText, { color: '#FFF' }]}>Subir copia</Text>
+                <MaterialCommunityIcons name="cloud-upload-outline" size={18} color={colors.onAccent} />
+                <Text style={[styles.buttonText, { color: colors.onAccent }]}>Subir copia</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"

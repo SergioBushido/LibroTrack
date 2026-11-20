@@ -6,6 +6,7 @@ export type ColorTheme = {
   ink2: string;
   ink3: string;
   accent: string;
+  onAccent: string;
   accent2: string;
   gold: string;
   green: string;
@@ -30,6 +31,7 @@ export const lightColors: ColorTheme = {
   ink2: '#4A4358',
   ink3: '#9590A0',
   accent: '#6C5CE7',      // Rich violet
+  onAccent: '#FFFFFF',
   accent2: '#E17055',     // Warm coral
   gold: '#D4A03C',
   green: '#00B894',       // Teal-green
@@ -53,6 +55,7 @@ export const darkColors: ColorTheme = {
   ink2: '#A29BFE',
   ink3: '#6A6378',
   accent: '#A29BFE',
+  onAccent: '#120F1A',
   accent2: '#FAB1A0',
   gold: '#FDCB6E',
   green: '#55EFC4',

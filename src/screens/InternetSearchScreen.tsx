@@ -16,7 +16,9 @@ export const InternetSearchScreen = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { colors, isDark } = useTheme();
+  const [searchError, setSearchError] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+  const { colors } = useTheme();
   const globalStyles = getGlobalStyles(colors);
   const layout = useResponsiveLayout();
 
@@ -28,6 +30,8 @@ export const InternetSearchScreen = () => {
         handleLocalSearch();
       } else {
         setResults([]);
+        setSearchError('');
+        setHasSearched(false);
       }
     }, 800);
 
@@ -40,21 +44,31 @@ export const InternetSearchScreen = () => {
   }, [query]);
 
   const handleLocalSearch = async () => {
+    if (!query.trim()) return;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setIsLoading(true);
+    setSearchError('');
     try {
-      const books = await searchBooksOnGoogle(query, abortControllerRef.current.signal);
+      const books = await searchBooksOnGoogle(query, controller.signal);
+      if (controller.signal.aborted) return;
       setResults(books);
+      setHasSearched(true);
     } catch (error: unknown) {
-      if (!(error instanceof Error) || error.name !== 'AbortError') {
-        console.error(error);
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        return;
       }
+      setResults([]);
+      setHasSearched(true);
+      setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -116,7 +130,7 @@ export const InternetSearchScreen = () => {
           onSubmitEditing={handleLocalSearch}
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => { HapticService.light(); setQuery(''); setResults([]); }}>
+          <TouchableOpacity onPress={() => { HapticService.light(); setQuery(''); setResults([]); setSearchError(''); setHasSearched(false); }}>
             <MaterialCommunityIcons name="close-circle" size={20} color={colors.ink3} />
           </TouchableOpacity>
         )}
@@ -129,13 +143,36 @@ export const InternetSearchScreen = () => {
         </View>
       )}
 
+      {!isLoading && !!searchError && (
+        <View style={[styles.feedbackCard, { backgroundColor: colors.cardBg, borderColor: colors.error + '60' }]}>
+          <MaterialCommunityIcons name="wifi-off" size={22} color={colors.error} />
+          <Text style={[styles.feedbackText, { color: colors.ink2 }]}>{searchError}</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={handleLocalSearch}
+            style={[styles.retryBtn, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.retryBtnText, { color: colors.onAccent }]}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {!isLoading && !searchError && hasSearched && results.length === 0 && (
+        <View style={[styles.feedbackCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <MaterialCommunityIcons name="book-search-outline" size={22} color={colors.ink3} />
+          <Text style={[styles.feedbackText, { color: colors.ink2 }]}>
+            No se encontraron sugerencias en Google Books. Prueba con los buscadores externos de abajo.
+          </Text>
+        </View>
+      )}
+
       {results.length > 0 && (
         <View style={styles.resultsSection}>
           <Text style={[styles.sectionTitle, { color: colors.ink }]}>Sugerencias</Text>
           {results.map((book, index) => (
             <FadeInView
               key={book.id}
-              delay={200 + index * 100}
+              delay={Math.min(index, 4) * 70}
               style={[styles.resultCard, layout.compact && { flexDirection: 'column', gap: 12 }, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
             >
               {book.coverUrl ? (
@@ -152,8 +189,8 @@ export const InternetSearchScreen = () => {
                   style={[styles.addBtn, { backgroundColor: colors.accent }]}
                   onPress={() => handleAddToLibrary(book)}
                 >
-                  <MaterialCommunityIcons name="plus" size={16} color={'#FFF'} />
-                  <Text style={[styles.addBtnText, { color: '#FFF' }]}>Añadir</Text>
+                  <MaterialCommunityIcons name="plus" size={16} color={colors.onAccent} />
+                  <Text style={[styles.addBtnText, { color: colors.onAccent }]}>Añadir</Text>
                 </TouchableOpacity>
               </View>
             </FadeInView>
@@ -217,6 +254,28 @@ const styles = StyleSheet.create({
   loaderContainer: {
     alignItems: 'center',
     marginVertical: theme.spacing.xl,
+  },
+  feedbackCard: {
+    alignItems: 'center',
+    gap: theme.spacing.s,
+    padding: theme.spacing.m,
+    borderRadius: theme.borderRadius.l,
+    borderWidth: 1,
+    marginBottom: theme.spacing.l,
+  },
+  feedbackText: {
+    ...theme.typography.caption,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    paddingHorizontal: theme.spacing.m,
+    paddingVertical: theme.spacing.s,
+    borderRadius: theme.borderRadius.round,
+    marginTop: theme.spacing.xs,
+  },
+  retryBtnText: {
+    ...theme.typography.caption,
+    fontWeight: '700',
   },
   resultsSection: {
     marginBottom: theme.spacing.xl,

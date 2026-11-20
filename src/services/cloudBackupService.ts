@@ -3,9 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { getAllBooks, replaceAllBooks } from './bookStorage';
 import { createBackupPayload, parseBackupPayload } from './backupService';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
-export const CLOUD_TOKEN_KEY = 'librotrack_github_gist_token';
-export const CLOUD_META_KEY = 'lecturas_cloud_backup_meta';
+export const CLOUD_TOKEN_KEY = STORAGE_KEYS.CLOUD_TOKEN;
+export const CLOUD_META_KEY = STORAGE_KEYS.CLOUD_META;
 export const CLOUD_GIST_FILENAME = 'librotrack-backup.json';
 export const GITHUB_GIST_TOKEN_URL =
   'https://github.com/settings/tokens/new?scopes=gist&description=LibroTrack%20Backup';

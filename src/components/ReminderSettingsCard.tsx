@@ -199,7 +199,7 @@ export const ReminderSettingsCard: React.FC<Props> = ({ progress }) => {
                       },
                     ]}
                   >
-                    <Text style={[styles.chipText, { color: active ? '#FFF' : colors.ink }]}>
+                    <Text style={[styles.chipText, { color: active ? colors.onAccent : colors.ink }]}>
                       {option.label}
                     </Text>
                   </TouchableOpacity>
@@ -231,7 +231,7 @@ export const ReminderSettingsCard: React.FC<Props> = ({ progress }) => {
                         },
                       ]}
                     >
-                      <Text style={[styles.dayText, { color: active ? '#FFF' : colors.ink }]}>
+                      <Text style={[styles.dayText, { color: active ? colors.onAccent : colors.ink }]}>
                         {option.short}
                       </Text>
                     </TouchableOpacity>

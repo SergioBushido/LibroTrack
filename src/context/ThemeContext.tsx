@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightColors, darkColors, ColorTheme } from '../constants/theme';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -21,7 +22,7 @@ const ThemeContext = createContext<ThemeContextData>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-const THEME_STORAGE_KEY = 'lecturas_theme_mode';
+const THEME_STORAGE_KEY = STORAGE_KEYS.THEME;
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemColorScheme = useColorScheme();

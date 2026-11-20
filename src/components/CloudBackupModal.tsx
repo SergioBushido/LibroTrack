@@ -170,7 +170,7 @@ export const CloudBackupModal: React.FC<Props> = ({ config, onClose, onSaved }) 
                 onPress={handleSave}
                 style={[styles.button, { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 }]}
               >
-                <Text style={{ color: '#FFF', fontWeight: '600' }}>
+                <Text style={{ color: colors.onAccent, fontWeight: '600' }}>
                   {saving ? 'Guardando…' : 'Guardar'}
                 </Text>
               </TouchableOpacity>

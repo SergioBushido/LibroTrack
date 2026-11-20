@@ -19,6 +19,7 @@ import {
 } from '../utils/filters';
 import { calculateStats } from '../services/statsService';
 import { theme, getGlobalStyles } from '../constants/theme';
+import { STORAGE_KEYS, parseReadingGoal } from '../constants/storageKeys';
 import { useTheme } from '../context/ThemeContext';
 import { BookCard } from '../components/BookCard';
 import { EmptyState } from '../components/EmptyState';
@@ -29,9 +30,6 @@ import { RatingBadge } from '../components/RatingBadge';
 import { BookCardSkeleton, SkeletonLoader } from '../components/SkeletonLoader';
 import { HapticService } from '../services/HapticService';
 import { FadeInView } from '../components/FadeInView';
-
-const GOAL_KEY = 'lecturas_reto_goal';
-const SORT_KEY = 'lecturas_books_sort';
 
 type FilterType = 'Todos' | Rating | string;
 
@@ -49,6 +47,7 @@ export const BooksScreen = () => {
   const isLoadedRef = useRef(false);
   const [streak, setStreak] = useState(0);
   const [updatingCovers, setUpdatingCovers] = useState(false);
+  const [coverProgress, setCoverProgress] = useState({ done: 0, total: 0 });
   const [lastBook, setLastBook] = useState<Book | null>(null);
   const [goal, setGoal] = useState(20);
 
@@ -59,10 +58,17 @@ export const BooksScreen = () => {
   const layout = useResponsiveLayout();
 
   const currentYear = new Date().getFullYear().toString();
-  const nextYear = (new Date().getFullYear() + 1).toString();
+  const dynamicYears = Array.from(
+    new Set([
+      currentYear,
+      ...books
+        .map(book => book.endDate.split('-')[0])
+        .filter(year => /^\d{4}$/.test(year)),
+    ]),
+  ).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
 
   const FILTER_OPTIONS: FilterType[] = [
-    'Todos', 'Muy bueno', 'Bueno', 'Regular', 'Malo', currentYear, nextYear
+    'Todos', 'Muy bueno', 'Bueno', 'Regular', 'Malo', ...dynamicYears,
   ];
 
   const loadData = async (silent = false) => {
@@ -74,10 +80,10 @@ export const BooksScreen = () => {
       setBooks(sortedBooks);
 
       const [savedGoal, savedSort] = await Promise.all([
-        AsyncStorage.getItem(GOAL_KEY),
-        AsyncStorage.getItem(SORT_KEY),
+        AsyncStorage.getItem(STORAGE_KEYS.GOAL),
+        AsyncStorage.getItem(STORAGE_KEYS.BOOKS_SORT),
       ]);
-      const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
+      const currentGoal = parseReadingGoal(savedGoal);
       setGoal(currentGoal);
       const effectiveSort = isBookSortOption(savedSort) ? savedSort : filtersRef.current.sortBy;
       if (effectiveSort !== filtersRef.current.sortBy) {
@@ -118,14 +124,16 @@ export const BooksScreen = () => {
       result = result.filter(book =>
         book.title.toLowerCase().includes(q) ||
         (book.author && book.author.toLowerCase().includes(q)) ||
-        (book.notes && book.notes.toLowerCase().includes(q))
+        (book.genre && book.genre.toLowerCase().includes(q)) ||
+        (book.notes && book.notes.toLowerCase().includes(q)) ||
+        (book.quote && book.quote.toLowerCase().includes(q))
       );
     }
 
     if (filter !== 'Todos') {
       if (['Muy bueno', 'Bueno', 'Regular', 'Malo'].includes(filter as string)) {
         result = result.filter(book => book.rating === filter);
-      } else if (filter === currentYear || filter === nextYear) {
+      } else if (/^\d{4}$/.test(filter as string)) {
         result = result.filter(book => book.endDate.startsWith(filter as string));
       }
     }
@@ -150,7 +158,7 @@ export const BooksScreen = () => {
     HapticService.selection();
     setSortBy(nextSort);
     applyFilters(books, query, activeFilter, nextSort);
-    AsyncStorage.setItem(SORT_KEY, nextSort).catch(() => undefined);
+    AsyncStorage.setItem(STORAGE_KEYS.BOOKS_SORT, nextSort).catch(() => undefined);
   };
 
   const handleDelete = (id: string) => {
@@ -183,14 +191,17 @@ export const BooksScreen = () => {
     try {
       const allBooks = await getAllBooks();
       const missingCoverBooks = allBooks.filter(book => !book.coverUrl);
+      setCoverProgress({ done: 0, total: missingCoverBooks.length });
       let updatedCount = 0;
 
-      for (const book of missingCoverBooks) {
+      for (let idx = 0; idx < missingCoverBooks.length; idx++) {
+        const book = missingCoverBooks[idx];
         const coverUrl = await fetchBookCoverUrl(book.title, book.author ?? '');
         if (coverUrl) {
           await updateBook(book.id, { coverUrl });
           updatedCount += 1;
         }
+        setCoverProgress({ done: idx + 1, total: missingCoverBooks.length });
       }
 
       await loadData(true);
@@ -208,6 +219,7 @@ export const BooksScreen = () => {
       notice.alert('Actualización de portadas interrumpida', 'Las portadas que ya se hayan guardado se conservan. Vuelve a intentarlo para buscar las que faltan.', [{ text: 'Entendido' }], { variant: 'error' });
     } finally {
       setUpdatingCovers(false);
+      setCoverProgress({ done: 0, total: 0 });
     }
   };
 
@@ -325,7 +337,7 @@ export const BooksScreen = () => {
             >
               <Text style={[
                 styles.filterText,
-                { color: isActive ? colors.cream : colors.ink2, fontWeight: isActive ? '700' : '500' }
+                { color: isActive ? colors.onAccent : colors.ink2, fontWeight: isActive ? '700' : '500' }
               ]}>
                 {filter}
               </Text>
@@ -400,8 +412,12 @@ export const BooksScreen = () => {
   };
 
   const selectedSection = selectedYear ? bookSections.find(section => section.title === selectedYear) : null;
-  const showFlatSortedList = !selectedYear && sortBy !== 'date_desc' && sortBy !== 'date_asc';
+  const hasActiveSearchOrFilter = query.trim().length > 0 || activeFilter !== 'Todos';
+  const showFlatSortedList = !selectedYear && (hasActiveSearchOrFilter || (sortBy !== 'date_desc' && sortBy !== 'date_asc'));
   const activeSortLabel = BOOK_SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? 'Más recientes';
+  const flatListHeader = hasActiveSearchOrFilter
+    ? `RESULTADOS (${sortedFilteredBooks.length}) · ${activeSortLabel.toUpperCase()}`
+    : `${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`;
 
   return (
     <View style={globalStyles.container}>
@@ -443,7 +459,7 @@ export const BooksScreen = () => {
         ) : showFlatSortedList ? (
           <View>
             <Text style={[styles.sectionLabel, { color: colors.ink3 }]}>
-              {`${activeSortLabel.toUpperCase()} (${sortedFilteredBooks.length})`}
+              {flatListHeader}
             </Text>
             {sortedFilteredBooks.length > 0 ? (
               sortedFilteredBooks.map((book, index) => (
@@ -494,7 +510,11 @@ export const BooksScreen = () => {
             >
               <Text style={[styles.coverButtonText, { color: colors.ink3 }]}>
                 <MaterialCommunityIcons name="image-sync" size={14} />
-                {updatingCovers ? ' ACTUALIZANDO...' : ' SINCRONIZAR PORTADAS'}
+                {updatingCovers
+                  ? coverProgress.total > 0
+                    ? ` ACTUALIZANDO PORTADAS (${coverProgress.done}/${coverProgress.total})…`
+                    : ' ACTUALIZANDO…'
+                  : ' SINCRONIZAR PORTADAS'}
               </Text>
             </TouchableOpacity>
           </View>

@@ -1,9 +1,10 @@
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme, getGlobalStyles } from '../constants/theme';
+import { STORAGE_KEYS, parseReadingGoal } from '../constants/storageKeys';
 import { useTheme } from '../context/ThemeContext';
 import { getAllBooks } from '../services/bookStorage';
 import { calculateStats, Stats } from '../services/statsService';
@@ -19,8 +20,6 @@ import { ReminderSettingsCard } from '../components/ReminderSettingsCard';
 import { FadeInView } from '../components/FadeInView';
 import { HapticService } from '../services/HapticService';
 import { syncReadingChallengeReminder } from '../services/notificationService';
-
-const GOAL_KEY = 'lecturas_reto_goal';
 
 export const StatsScreen = () => {
   const [editingGoal, setEditingGoal] = useState(false);
@@ -38,8 +37,8 @@ export const StatsScreen = () => {
     if (!silent) setLoading(true);
     try {
       setLoadError(false);
-      const savedGoal = await AsyncStorage.getItem(GOAL_KEY);
-      const currentGoal = savedGoal ? parseInt(savedGoal, 10) : 20;
+      const savedGoal = await AsyncStorage.getItem(STORAGE_KEYS.GOAL);
+      const currentGoal = parseReadingGoal(savedGoal);
       setGoal(currentGoal);
 
       const books = await getAllBooks();
@@ -75,7 +74,7 @@ export const StatsScreen = () => {
     if (!/^\d+$/.test(text.trim()) || !Number.isSafeInteger(value) || value <= 0) {
       throw new Error('Introduce un número entero mayor que cero');
     }
-    await AsyncStorage.setItem(GOAL_KEY, String(value));
+    await AsyncStorage.setItem(STORAGE_KEYS.GOAL, String(value));
     HapticService.success();
     await loadData(true);
   };
@@ -148,14 +147,13 @@ export const StatsScreen = () => {
                 ]}
                 onPress={() => { HapticService.selection(); setSelectedYear(year); }}
               >
-                <Text style={[styles.yearChipText, { color: isActive ? colors.cream : colors.ink }]}>{label}</Text>
+                <Text style={[styles.yearChipText, { color: isActive ? colors.onAccent : colors.ink }]}>{label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </FadeInView>
 
-      <BackupActions onRestored={() => loadData(true)} />
       {editingGoal && <TextEditModal title="Reto lector" initialValue={String(goal)} numeric onClose={() => setEditingGoal(false)} onSave={saveGoal} />}
       <RetoLectorCard
         year={isTotal ? new Date().getFullYear() : selectedYear}
@@ -165,7 +163,6 @@ export const StatsScreen = () => {
         predictionText={predictionText}
         onEditGoal={handleEditGoal}
       />
-      <ReminderSettingsCard progress={{ year: new Date().getFullYear(), current: currentYearCount, goal }} />
 
       <FadeInView delay={200} style={[styles.grid2x2, layout.rowStyle]}>
         <StatsCard title={isTotal ? "Total" : "Año"} value={isTotal ? stats.totalBooks : stats.booksThisYear} subtitle="libros" />
@@ -191,13 +188,37 @@ export const StatsScreen = () => {
       </FadeInView>
 
       <FadeInView delay={500} style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.ink }]}>Distribución por valoración (General)</Text>
+        <Text style={[styles.sectionTitle, { color: colors.ink }]}>
+          {isTotal ? 'Distribución por valoración (Total)' : `Valoraciones en ${selectedYear}`}
+        </Text>
         <DonutChart data={stats.booksByRating} />
       </FadeInView>
 
+      {Object.keys(stats.booksByGenre).length > 0 && (
+        <FadeInView delay={550} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>
+            {isTotal ? 'Géneros leídos (Total)' : `Géneros en ${selectedYear}`}
+          </Text>
+          <View style={styles.moodsRow}>
+            {Object.entries(stats.booksByGenre)
+              .sort((a, b) => b[1] - a[1])
+              .map(([genre, count]) => (
+                <View key={genre} style={[styles.genrePill, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                  <Text style={[styles.genreLabel, { color: colors.ink }]}>{genre}</Text>
+                  <View style={[styles.genreCountBadge, { backgroundColor: colors.accentSoft }]}>
+                    <Text style={[styles.genreCountText, { color: colors.accent }]}>{count}</Text>
+                  </View>
+                </View>
+              ))}
+          </View>
+        </FadeInView>
+      )}
+
       {Object.keys(stats.booksByMood).length > 0 && (
         <FadeInView delay={600} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.ink }]}>Estados de ánimo (General)</Text>
+          <Text style={[styles.sectionTitle, { color: colors.ink }]}>
+            {isTotal ? 'Estados de ánimo (Total)' : `Estados de ánimo en ${selectedYear}`}
+          </Text>
           <View style={styles.moodsRow}>
             {Object.entries(stats.booksByMood).sort((a, b) => b[1] - a[1]).map(([mood, count]) => (
               <View key={mood} style={[styles.moodCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
@@ -228,7 +249,7 @@ export const StatsScreen = () => {
           {stats.slowestBook && (
             <FadeInView delay={800} style={[styles.recordCard, { marginTop: theme.spacing.m, backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}>
               <View style={[styles.recordIconBox, { backgroundColor: colors.accent }]}>
-                <MaterialCommunityIcons name="tortoise" size={20} color={colors.cream} />
+                <MaterialCommunityIcons name="tortoise" size={20} color={colors.onAccent} />
               </View>
               <View style={styles.recordInfo}>
                 <Text style={[styles.recordLabel, { color: colors.accent }]}>LECTURA MÁS PAUSADA</Text>
@@ -238,6 +259,11 @@ export const StatsScreen = () => {
           )}
         </View>
       )}
+
+      <View style={[styles.toolsDivider, { borderTopColor: colors.border }]}>
+        <ReminderSettingsCard progress={{ year: new Date().getFullYear(), current: currentYearCount, goal }} />
+        <BackupActions onRestored={() => loadData(true)} />
+      </View>
 
     </ScrollView>
   );
@@ -336,11 +362,43 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.round,
     borderWidth: 1,
     marginRight: theme.spacing.s,
-    ...theme.shadow,
+    ...theme.shadow.soft,
     elevation: 2,
   },
   yearChipText: {
     ...theme.typography.body,
     fontWeight: '700',
+  },
+  genrePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.s,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.round,
+    paddingVertical: theme.spacing.s,
+    paddingLeft: theme.spacing.m,
+    paddingRight: theme.spacing.s,
+  },
+  genreLabel: {
+    ...theme.typography.caption,
+    fontWeight: '600',
+  },
+  genreCountBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genreCountText: {
+    ...theme.typography.small,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  toolsDivider: {
+    marginTop: theme.spacing.xl,
+    paddingTop: theme.spacing.l,
+    borderTopWidth: 1,
   },
 });

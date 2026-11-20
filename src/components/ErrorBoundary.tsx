@@ -70,8 +70,8 @@ class ErrorBoundaryInner extends React.Component<BoundaryProps, BoundaryState> {
               onPress={this.handleRetry}
               style={[styles.retryBtn, { backgroundColor: colors.accent }]}
             >
-              <MaterialCommunityIcons name="refresh" size={20} color="#FFF" />
-              <Text style={styles.retryText}>Reintentar</Text>
+              <MaterialCommunityIcons name="refresh" size={20} color={colors.onAccent} />
+              <Text style={[styles.retryText, { color: colors.onAccent }]}>Reintentar</Text>
             </TouchableOpacity>
 
             {this.state.errorMessage ? (

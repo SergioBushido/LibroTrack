@@ -85,7 +85,7 @@ export const AppNavigator = () => {
           }
 
           if (route.name === 'Añadir') {
-            return <MaterialCommunityIcons name="plus" size={32} color={'#FFF'} />;
+            return <MaterialCommunityIcons name="plus" size={32} color={colors.onAccent} />;
           }
 
           return <MaterialCommunityIcons name={iconName} size={28} color={color} />;

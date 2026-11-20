@@ -107,7 +107,7 @@ export const NoticeProvider = ({ children }: { children: React.ReactNode }) => {
                   {dialog.buttons.map((button, index) => {
                     const secondary = button.style === 'cancel';
                     const backgroundColor = secondary ? colors.cream : button.style === 'destructive' ? (isDark ? '#FFB4AB' : '#A52626') : colors.accent;
-                    const color = secondary ? colors.ink2 : button.style === 'destructive' ? (isDark ? '#410002' : '#FFFFFF') : colors.cream;
+                    const color = secondary ? colors.ink2 : button.style === 'destructive' ? (isDark ? '#410002' : '#FFFFFF') : colors.onAccent;
                     return (
                       <Pressable key={index} accessibilityRole="button" onPress={() => finish(button)}
                         style={({ pressed }) => [styles.button, { backgroundColor, opacity: pressed ? 0.75 : 1 }]}>

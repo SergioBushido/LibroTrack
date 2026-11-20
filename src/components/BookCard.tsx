@@ -19,7 +19,7 @@ interface Props {
 }
 
 export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, index = 0 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const globalStyles = getGlobalStyles(colors);
   const layout = useResponsiveLayout();
   const days = calculateReadingDays(book.startDate, book.endDate);
@@ -27,25 +27,36 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
 
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(50)).current;
+  const translateY = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    Animated.parallel([
+    setImageError(false);
+  }, [book.coverUrl]);
+
+  useEffect(() => {
+    const cappedDelay = Math.min(Math.max(0, index), 6) * 45;
+    const animation = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 500,
-        delay: index * 100,
+        duration: 360,
+        delay: cappedDelay,
         useNativeDriver: true,
       }),
       Animated.spring(translateY, {
         toValue: 0,
-        damping: 15,
-        stiffness: 100,
-        delay: index * 100,
+        damping: 16,
+        stiffness: 120,
+        delay: cappedDelay,
         useNativeDriver: true,
       })
-    ]).start();
+    ]);
+    animation.start();
+    return () => animation.stop();
   }, [index, opacity, translateY]);
+
+  const ratingAccentColor = isDark
+    ? theme.ratingColors[book.rating].darkText
+    : theme.ratingColors[book.rating].text;
 
   const handlePressIn = () => {
     Animated.spring(scale, {
@@ -127,7 +138,7 @@ export const BookCard: React.FC<Props> = ({ book, onPress, onEdit, onDelete, ind
         </View>
 
         {book.notes && (
-          <View style={[styles.notesContainer, { backgroundColor: colors.cream + '50' }]}>
+          <View style={[styles.notesContainer, { backgroundColor: colors.cream + '50', borderLeftColor: ratingAccentColor }]}>
             <Text style={[styles.notesText, { color: colors.ink2 }]} numberOfLines={2}>
               "{book.notes}"
             </Text>
@@ -248,7 +259,6 @@ const styles = StyleSheet.create({
     padding: theme.spacing.s,
     borderRadius: theme.borderRadius.s,
     borderLeftWidth: 2,
-    borderLeftColor: theme.ratingColors.Bueno.text, // Default accent
   },
   notesText: {
     ...theme.typography.caption,

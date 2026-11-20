@@ -119,11 +119,14 @@ export const AddBookScreen = () => {
   useEffect(() => {
     if (title.trim().length >= 2 && !suppliedCover.current) {
       coverTimer.current = setTimeout(() => handleFetchPreview(), 1200);
+    } else {
+      setIsFetchingCover(false);
     }
     return () => {
       if (coverTimer.current) clearTimeout(coverTimer.current);
       coverRequest.current++;
       coverController.current?.abort();
+      setIsFetchingCover(false);
     };
   }, [title, author]);
 
@@ -169,6 +172,7 @@ export const AddBookScreen = () => {
       setMood(null);
       setNotes('');
       setQuote('');
+      setErrors({});
       setPreviewCoverUrl(null);
       navigation.setParams({ title: undefined, author: undefined, coverUrl: undefined });
       navigation.navigate('Biblioteca', { screen: 'BooksList' });
@@ -200,7 +204,12 @@ export const AddBookScreen = () => {
         <TextInput
           style={[styles.input, { backgroundColor: colors.cardBg, borderColor: colors.border, color: colors.ink }, errors.title && { borderColor: colors.error }]}
           value={title}
-          onChangeText={value => { resetCover(); setTitle(value); }} editable={!saving}
+          onChangeText={value => {
+            resetCover();
+            setTitle(value);
+            if (errors.title) setErrors(previous => ({ ...previous, title: '' }));
+          }}
+          editable={!saving}
           placeholderTextColor={colors.ink3}
           placeholder="Ej: Cien años de soledad"
         />
@@ -219,11 +228,11 @@ export const AddBookScreen = () => {
           disabled={isFetchingCover || saving}
         >
           {isFetchingCover ? (
-            <ActivityIndicator color="#FFF" size="small" />
+            <ActivityIndicator color={colors.onAccent} size="small" />
           ) : (
             <>
-              <MaterialCommunityIcons name="image-search-outline" size={20} color="#FFF" />
-              <Text style={styles.searchCoverBtnText}>Buscar portada</Text>
+              <MaterialCommunityIcons name="image-search-outline" size={20} color={colors.onAccent} />
+              <Text style={[styles.searchCoverBtnText, { color: colors.onAccent }]}>Buscar portada</Text>
             </>
           )}
         </TouchableOpacity>
@@ -307,7 +316,10 @@ export const AddBookScreen = () => {
                   layout.compact && { width: '100%' },
                   { backgroundColor: isSelected ? bg : colors.cardBg, borderColor: isSelected ? textColor : colors.border }
                 ]}
-                onPress={() => setRating(r)}
+                onPress={() => {
+                  setRating(r);
+                  if (errors.rating) setErrors(previous => ({ ...previous, rating: '' }));
+                }}
               >
                 <Text style={[styles.ratingText, { color: isSelected ? textColor : colors.ink }]}>{r}</Text>
               </TouchableOpacity>
@@ -348,7 +360,7 @@ export const AddBookScreen = () => {
       </View>
 
       <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} disabled={saving} onPress={handleSave}>
-        <Text style={[styles.saveBtnText, { color: '#FFF' }]}>Guardar libro</Text>
+        <Text style={[styles.saveBtnText, { color: colors.onAccent }]}>Guardar libro</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -460,11 +472,10 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.s,
     borderRadius: theme.borderRadius.round,
     gap: theme.spacing.xs,
-    ...theme.shadow,
+    ...theme.shadow.medium,
     elevation: 4,
   },
   searchCoverBtnText: {
-    color: '#FFF',
     ...theme.typography.small,
     fontWeight: '600',
   }

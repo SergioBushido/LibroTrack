@@ -85,7 +85,7 @@ export const DateField = ({ label, value, onChange, minDate, maxDate, error, dis
                       accessibilityState={{ selected, disabled: !enabled }} disabled={!enabled} onPress={() => select(date)}
                       style={[styles.cell, { backgroundColor: selected ? colors.accent : 'transparent', opacity: enabled ? 1 : 0.25,
                         borderColor: date === today ? colors.accent : 'transparent' }]}>
-                      <Text style={{ color: selected ? colors.cream : colors.ink }}>{parseISO(date).getDate()}</Text>
+                      <Text style={{ color: selected ? colors.onAccent : colors.ink }}>{parseISO(date).getDate()}</Text>
                     </TouchableOpacity>
                   );
                 })}

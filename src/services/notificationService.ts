@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
-export const REMINDER_STORAGE_KEY = 'lecturas_reminder_settings';
+export const REMINDER_STORAGE_KEY = STORAGE_KEYS.REMINDER_SETTINGS;
 export const REMINDER_CHANNEL_ID = 'reto-lector';
 
 export type ReminderFrequency = 'daily' | 'weekly';

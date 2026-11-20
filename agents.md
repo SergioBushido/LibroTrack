@@ -54,3 +54,30 @@ La aplicación es funcional y cuenta con su arquitectura base sólida. Se han co
 - [x] Sistema de notificaciones locales para recordar el reto lector (frecuencia diaria/semanal, hora configurable, sincronización con progreso y aviso de prueba).
 - [x] Sincronización en la nube para copias de seguridad (GitHub Gist privado con token cifrado en `expo-secure-store`, auto-descubrimiento y restauración validada).
 - [x] Mejoras técnicas: `ErrorBoundary` global, ordenación personalizable de biblioteca persistida y tipado estricto de navegación/servicios sin `any`.
+
+## 🔍 Plan de Auditoría y Mejoras
+
+### Fase 1: Corrección de bugs detectados (B1–B15)
+- [x] **B1 / B15**: Evitar sobrescritura automática de portada al abrir `EditBookScreen`, añadir `AbortController` y selector múltiple de portadas + «Quitar portada».
+- [x] **B2**: Corregir spread inválido `...theme.shadow` por `...theme.shadow.soft`/`.medium` en `BarChart`, `DonutChart`, `StatsScreen`, `AddBookScreen` y `EditBookScreen`.
+- [x] **B3 / B14**: Acotar el delay de entrada de `BookCard`, resetear `imageError` al cambiar `coverUrl` y usar colores temáticos reales en bordes/notas.
+- [x] **B4 / B13**: Alinear estadísticas por año seleccionado (`avgDaysPerBook`, valoraciones, ánimos y géneros), proteger división por cero en reto lector, centralizar claves de `AsyncStorage` y limpiar imports sin uso.
+- [x] **B5**: Permitir títulos cortos (1–2 caracteres como *It*, *Yo*, *Oz*) en `parser.ts` y mostrar progreso real al importar notas.
+- [x] **B6**: Añadir token de contraste `colors.onAccent` (WCAG AA/AAA) en modo claro y oscuro para botones y chips primarios.
+- [x] **B7**: Propagar y mostrar errores de red con opción de reintentar en *Descubrir* (`internetSearchService` / `InternetSearchScreen`).
+- [x] **B8**: Generar chips de año dinámicos según la biblioteca real en `BooksScreen`, buscar también en género/cita y mostrar resultados directos al filtrar o buscar.
+- [x] **B9**: Usar fecha local (`yyyy-MM-dd`) en nombres de archivo JSON/CSV en `backupService.ts`.
+- [x] **B10 / B11 / B12**: Limpiar `isFetchingCover` y `errors` en `AddBookScreen`, detener `Animated.loop` en `SkeletonLoader` y proteger promesas en `HapticService`.
+
+### Fase 2: Refactorización, rendimiento y diseño/UX
+- [ ] Extraer formulario compartido `BookForm.tsx` para unificar `AddBookScreen` y `EditBookScreen`.
+- [ ] Virtualizar el listado de libros en `BooksScreen` con `FlatList` para grandes bibliotecas.
+- [x] Reordenar jerarquía visual de `StatsScreen` (protagonismo al Reto Lector y gráficas; herramientas de mantenimiento debajo) y añadir desglose por género más leído.
+- [ ] Mejorar visualización mensual/anual en `BarChart` (barras reales o etiquetas de valor claras) — *(progreso live en sincronización de portadas ya añadido)*.
+- [ ] Añadir lint/formato automatizado en CI (`.github/workflows/ci.yml`).
+
+### Fase 3: Nuevas funcionalidades
+- [ ] Estados de lectura (*Leyendo ahora* con progreso, *Pendientes / Wishlist* y *Leídos*).
+- [ ] Filtro por género en Biblioteca.
+- [ ] Compartir tarjeta/resumen de lectura o cita favorita desde `BookDetailScreen`.
+- [ ] Búsqueda directa por ISBN en *Descubrir*.

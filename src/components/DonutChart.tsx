@@ -57,7 +57,7 @@ export const DonutChart: React.FC<Props> = ({ data }) => {
       </View>
       {(compact || total >= 10000) && <Text style={[styles.centerTotal, { color: colors.ink }]}>{total} libros</Text>}
 
-      <View style={styles.legendContainer}>
+      <View style={[styles.legendContainer, { borderTopColor: colors.border }]}>
         {chartData.map((item) => {
           const percentage = Math.round((item.count / total) * 100);
           return (
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     padding: theme.spacing.l,
-    ...theme.shadow,
+    ...theme.shadow.soft,
     elevation: 3,
   },
   chartWrapper: {
@@ -112,7 +112,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.m,
     paddingTop: theme.spacing.m,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(128,128,128,0.1)',
   },
   legendItem: {
     flexDirection: 'row',

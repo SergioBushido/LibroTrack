@@ -31,7 +31,7 @@ export const GenreSelector: React.FC<Props> = ({ value, onChange }) => {
           >
             <Text style={[
               styles.text, 
-              { color: isSelected ? colors.cream : colors.ink2, fontWeight: isSelected ? '600' : 'normal' }
+              { color: isSelected ? colors.onAccent : colors.ink2, fontWeight: isSelected ? '600' : 'normal' }
             ]}>
               {genre}
             </Text>

@@ -1,7 +1,7 @@
 import { useNotice } from '../context/NoticeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AddStackNavigationProp } from '../types/Navigation';
@@ -14,6 +14,7 @@ import { fetchBookCoverUrl } from '../services/bookCoverService';
 export const ImportBooksScreen = () => {
   const importingRef = useRef(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<ParsedBook[]>([]);
   const navigation = useNavigation<AddStackNavigationProp>();
@@ -38,6 +39,8 @@ export const ImportBooksScreen = () => {
     if (importingRef.current || preview.length === 0) return;
     importingRef.current = true;
     setImporting(true);
+    const totalToImport = preview.length;
+    setImportProgress({ done: 0, total: totalToImport });
     let importedCount = 0;
 
     try {
@@ -46,17 +49,19 @@ export const ImportBooksScreen = () => {
         const coverUrl = await fetchBookCoverUrl(item.title, '');
         await saveBook({ ...bookData, coverUrl: coverUrl ?? undefined });
         importedCount++;
+        setImportProgress({ done: importedCount, total: totalToImport });
       }
       setPreview([]);
       setText('');
       navigation.navigate('Biblioteca', { screen: 'BooksList' });
-      notice.success(`Se ${preview.length === 1 ? 'ha añadido 1 libro' : `han añadido ${preview.length} libros`} a tu biblioteca`);
+      notice.success(`Se ${totalToImport === 1 ? 'ha añadido 1 libro' : `han añadido ${totalToImport} libros`} a tu biblioteca`);
     } catch (error) {
       setPreview(previous => previous.slice(importedCount));
       notice.alert('Importación interrumpida', `${importedCount === 0 ? 'No se ha añadido ningún libro.' : `Se ${importedCount === 1 ? 'ha añadido 1 libro' : `han añadido ${importedCount} libros`}.`} La previsualización conserva los pendientes. Pulsa «Confirmar e importar» para reintentarlo.`, [{ text: 'Ver pendientes' }], { variant: 'error' });
     } finally {
       importingRef.current = false;
       setImporting(false);
+      setImportProgress({ done: 0, total: 0 });
     }
   };
 
@@ -81,8 +86,8 @@ export const ImportBooksScreen = () => {
         onChangeText={setText}
       />
 
-      <TouchableOpacity style={[styles.analyzeBtn, { backgroundColor: colors.accent }]} disabled={importing} onPress={handleAnalyze}>
-        <Text style={styles.analyzeBtnText}>Analizar texto</Text>
+      <TouchableOpacity style={[styles.analyzeBtn, { backgroundColor: colors.accent, opacity: importing ? 0.6 : 1 }]} disabled={importing} onPress={handleAnalyze}>
+        <Text style={[styles.analyzeBtnText, { color: colors.onAccent }]}>Analizar texto</Text>
       </TouchableOpacity>
 
       {preview.length > 0 && (
@@ -97,8 +102,17 @@ export const ImportBooksScreen = () => {
             ))}
           </View>
 
-          <TouchableOpacity style={[styles.importBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]} disabled={importing} onPress={handleImport}>
-            <Text style={[styles.importBtnText, { color: '#FFF' }]}>Confirmar e Importar</Text>
+          <TouchableOpacity style={[styles.importBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent), opacity: importing ? 0.75 : 1 }]} disabled={importing} onPress={handleImport}>
+            {importing ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator size="small" color={colors.onAccent} />
+                <Text style={[styles.importBtnText, { color: colors.onAccent }]}>
+                  {`Importando ${importProgress.done}/${importProgress.total}…`}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.importBtnText, { color: colors.onAccent }]}>Confirmar e Importar</Text>
+            )}
           </TouchableOpacity>
         </View>
       )}

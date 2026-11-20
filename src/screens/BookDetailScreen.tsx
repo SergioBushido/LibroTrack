@@ -406,8 +406,8 @@ export const BookDetailScreen = () => {
               style={[styles.editBtn, { backgroundColor: colors.accent, ...theme.shadow.glow(colors.accent) }]}
               onPress={handleEditBook}
             >
-              <MaterialCommunityIcons name="pencil" size={20} color="#FFF" />
-              <Text style={[styles.editBtnText, { color: '#FFF' }]}>Editar detalles</Text>
+              <MaterialCommunityIcons name="pencil" size={20} color={colors.onAccent} />
+              <Text style={[styles.editBtnText, { color: colors.onAccent }]}>Editar detalles</Text>
             </ScalePressable>
 
             <ScalePressable

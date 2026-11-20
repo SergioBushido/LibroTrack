@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: theme.spacing.m,
     overflow: 'hidden',
-    ...theme.shadow,
+    ...theme.shadow.soft,
     elevation: 3,
   },
   chart: {

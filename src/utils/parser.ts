@@ -1,4 +1,4 @@
-import { Book, Genre, Rating } from '../types/Book';
+import { Book, Rating } from '../types/Book';
 
 const MONTHS: Record<string, number> = {
   'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
@@ -43,9 +43,9 @@ export const parseNotes = (text: string): ParsedBook[] => {
     // If we have a month, try to extract book titles
     if (currentMonth) {
       // Remove common list prefixes: -, *, 1., 1)
-      let title = trimmedLine.replace(/^(?:[-*•]\s*|\d+[.)]\s+)/, '').trim();
+      const title = trimmedLine.replace(/^(?:[-*•]\s*|\d+[.)]\s+)/, '').trim();
       
-      if (title && title.length > 2) {
+      if (title && /[\p{L}\p{N}]/u.test(title)) {
         results.push({
           title,
           month: currentMonth,
@@ -65,7 +65,7 @@ export const convertToBook = (parsed: ParsedBook): Omit<Book, 'id' | 'createdAt'
   return {
     title: parsed.title,
     author: '',
-    genre: null as unknown as Genre,
+    genre: null,
     startDate: dateStr, // Default same as end date
     endDate: dateStr,
     rating: 'Regular' as Rating,

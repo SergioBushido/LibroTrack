@@ -48,7 +48,7 @@ export const TextEditModal = ({ title, initialValue, numeric, onClose, onSave }:
                 <Text style={{ color: colors.ink }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={saving} onPress={save} style={[styles.button, { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 }]}>
-                <Text style={{ color: '#FFF', fontWeight: '600' }}>{saving ? 'Guardando…' : 'Guardar'}</Text>
+                <Text style={{ color: colors.onAccent, fontWeight: '600' }}>{saving ? 'Guardando…' : 'Guardar'}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

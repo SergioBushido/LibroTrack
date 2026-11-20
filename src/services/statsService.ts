@@ -1,6 +1,6 @@
 import { Book, Rating } from '../types/Book';
 import { calculateReadingDays, getEndMonth, getEndYear } from '../utils/dateUtils';
-import { parseISO, isSameMonth, isSameYear } from 'date-fns';
+import { DEFAULT_READING_GOAL } from '../constants/storageKeys';
 
 export interface Stats {
   totalBooks: number;
@@ -11,7 +11,8 @@ export interface Stats {
   slowestBook: Book | null;
   booksByRating: Record<Rating, number>;
   booksByMood: Record<string, number>;
-  booksByMonth: number[];           // array de 12 posiciones, año actual
+  booksByGenre: Record<string, number>;
+  booksByMonth: number[];           // array de 12 posiciones del año mostrado
   booksByYear: Record<number, number>;
   retaProgress: {
     goal: number;
@@ -25,8 +26,10 @@ export interface Stats {
 
 export const calculateStats = (books: Book[], retaGoal: number, targetYear?: number): Stats => {
   const now = new Date();
+  const isTotalScope = targetYear === 0;
   const displayYear = targetYear || now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
+  const safeGoal = Number.isFinite(retaGoal) && retaGoal > 0 ? Math.trunc(retaGoal) : DEFAULT_READING_GOAL;
 
   const stats: Stats = {
     totalBooks: books.length,
@@ -37,10 +40,11 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
     slowestBook: null,
     booksByRating: { 'Malo': 0, 'Regular': 0, 'Bueno': 0, 'Muy bueno': 0 },
     booksByMood: {},
+    booksByGenre: {},
     booksByMonth: new Array(12).fill(0),
     booksByYear: {},
     retaProgress: {
-      goal: retaGoal,
+      goal: safeGoal,
       current: 0,
       percentage: 0,
       projectedTotal: 0,
@@ -51,7 +55,8 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
 
   if (books.length === 0) return stats;
 
-  let totalDays = 0;
+  let scopedDaysTotal = 0;
+  let scopedDaysCount = 0;
   let fastestDays = Infinity;
   let slowestDays = -1;
 
@@ -59,64 +64,64 @@ export const calculateStats = (books: Book[], retaGoal: number, targetYear?: num
     const endYear = getEndYear(book.endDate);
     const endMonth = getEndMonth(book.endDate); // 1-12
 
-    // Books by Year Map (siempre lo llenamos para todos los libros pasados)
     if (endYear > 0) {
       stats.booksByYear[endYear] = (stats.booksByYear[endYear] || 0) + 1;
     }
 
-    // Si estamos filtrando por un año específico, solo contamos para stats mensuales y progreso lo de ese año
+    if (endYear === now.getFullYear() && endMonth === currentMonth) {
+      stats.booksThisMonth++;
+    }
+
     if (endYear === displayYear) {
       stats.booksThisYear++;
       if (endMonth > 0 && endMonth <= 12) {
         stats.booksByMonth[endMonth - 1]++;
       }
-      
-      // La racha solo tiene sentido para el año y mes actual real
-      if (endYear === now.getFullYear() && endMonth === currentMonth) {
-        stats.booksThisMonth++;
+    }
+
+    const inScope = isTotalScope || endYear === displayYear;
+    if (!inScope) return;
+
+    const days = calculateReadingDays(book.startDate, book.endDate);
+    if (days > 0) {
+      scopedDaysTotal += days;
+      scopedDaysCount++;
+      if (days < fastestDays) {
+        fastestDays = days;
+        stats.fastestBook = book;
+      }
+      if (days > slowestDays) {
+        slowestDays = days;
+        stats.slowestBook = book;
       }
     }
 
-    // Days per book (calculado sobre los libros pasados a la función)
-    const days = calculateReadingDays(book.startDate, book.endDate);
-    totalDays += days;
-
-    if ((targetYear === 0 || endYear === displayYear) && days > 0 && days < fastestDays) {
-      fastestDays = days;
-      stats.fastestBook = book;
-    }
-    if ((targetYear === 0 || endYear === displayYear) && days > 0 && days > slowestDays) {
-      slowestDays = days;
-      stats.slowestBook = book;
-    }
-
-    // Rating
     if (book.rating) {
       stats.booksByRating[book.rating]++;
     }
 
-    // Mood
     if (book.mood) {
       stats.booksByMood[book.mood] = (stats.booksByMood[book.mood] || 0) + 1;
     }
+
+    if (book.genre) {
+      stats.booksByGenre[book.genre] = (stats.booksByGenre[book.genre] || 0) + 1;
+    }
   });
 
-  stats.avgDaysPerBook = Math.round(totalDays / books.length);
+  stats.avgDaysPerBook = scopedDaysCount > 0 ? Math.round(scopedDaysTotal / scopedDaysCount) : 0;
   stats.readingStreak = stats.booksThisMonth;
 
-  // Reto Progress (basado en el displayYear)
   stats.retaProgress.current = stats.booksThisYear;
-  stats.retaProgress.percentage = Math.min(100, Math.round((stats.booksThisYear / retaGoal) * 100));
-  
-  // Calcular proyeccion solo si es el año actual
+  stats.retaProgress.percentage = Math.min(100, Math.round((stats.booksThisYear / safeGoal) * 100));
+
   if (displayYear === now.getFullYear()) {
-    const monthsElapsed = currentMonth;
-    const runRatePerMonth = stats.booksThisYear / monthsElapsed;
+    const runRatePerMonth = stats.booksThisYear / currentMonth;
     stats.retaProgress.projectedTotal = Math.round(runRatePerMonth * 12);
-    stats.retaProgress.willAchieve = stats.retaProgress.projectedTotal >= retaGoal;
+    stats.retaProgress.willAchieve = stats.retaProgress.projectedTotal >= safeGoal;
   } else {
     stats.retaProgress.projectedTotal = stats.booksThisYear;
-    stats.retaProgress.willAchieve = stats.booksThisYear >= retaGoal;
+    stats.retaProgress.willAchieve = stats.booksThisYear >= safeGoal;
   }
 
   return stats;
